@@ -7,6 +7,9 @@ local addonName = ...
 -- main frame
 local addon = CreateFrame('Frame', "KiwiHonor", UIParent, BackdropTemplateMixin and "BackdropTemplate")
 
+-- libraries
+local lkm = LibStub("LibKiwiDropDownMenu-1.0", true)
+
 -- game version
 local VERSION = select(4,GetBuildInfo())
 local VANILA = VERSION<30000
@@ -25,27 +28,6 @@ local playerGUID = UnitGUID("player")
 -- default values
 local COLOR_WHITE = { 1,1,1,1 }
 local COLOR_TRANSPARENT = { 0,0,0,0 }
-local FONTS = (GetLocale() == 'zhCN') and {
-	Arial = 'Fonts\\ARHei.TTF',
-	FrizQT = 'Fonts\\ARHei.TTF',
-	Morpheus = 'Fonts\\ARHei.TTF',
-	Skurri = 'Fonts\\ARHei.TTF',
-} or {
-	Arial = 'Fonts\\ARIALN.TTF',
-	FrizQT = 'Fonts\\FRIZQT__.TTF',
-	Morpheus = 'Fonts\\MORPHEUS.TTF',
-	Skurri = 'Fonts\\SKURRI.TTF',
-}
-local BORDERS = {
-	["None"] = [[]],
-	["Blizzard Tooltip"] = [[Interface\Tooltips\UI-Tooltip-Border]],
-	["Blizzard Party"] = [[Interface\CHARACTERFRAME\UI-Party-Border]],
-	["Blizzard Dialog"] = [[Interface\DialogFrame\UI-DialogBox-Border]],
-	["Blizzard Dialog Gold"] = [[Interface\DialogFrame\UI-DialogBox-Gold-Border]],
-	["Blizzard Chat Bubble"] = [[Interface\Tooltips\ChatBubble-Backdrop]],
-	["Blizzard Achievement Wood"] = [[Interface\AchievementFrame\UI-Achievement-WoodBorder]],
-}
-
 -- database defaults
 local DEFAULTS = {
 	-- honor info
@@ -58,7 +40,7 @@ local DEFAULTS = {
 	snBgHonor = nil,
 	snBgTime = nil,
 	wkHonorGoal = nil,
-	--
+	-- text sections to hide
 	display = {},
 	-- frame appearance
 	visible = true, -- main frame visibility
@@ -158,6 +140,26 @@ do
 	end
 end
 
+-- safe rounded division
+local function safedivceil(dividend, divisor, default)
+	if dividend and divisor and divisor~=0 then
+		return ceil( dividend / divisor )
+	else
+		return default or nil
+	end
+end
+
+-- calculate honor per hour
+local function gethph( honor, elapsed, noZero)
+	if honor and elapsed and elapsed>=1 then
+		local hph = ceil( 3600 * honor / elapsed )
+		if (not noZero) or hph~=0 then
+			return hph
+		end
+	end
+	return nil
+end
+
 -- format duration
 local function FmtDurationHM(seconds)
 	if seconds then
@@ -197,10 +199,11 @@ end
 
 -- fonts
 local function SetTextFont(widget, name, size, flags)
-	widget:SetFont(name or FONTS.Arial or STANDARD_TEXT_FONT, size or 14, flags or 'OUTLINE')
+	local loaded = widget:SetFont(name or lkm.FONTS.Arial or STANDARD_TEXT_FONT, size or 14, flags or 'OUTLINE')
 	if not widget:GetFont() then
 		widget:SetFont(STANDARD_TEXT_FONT, size or 14, flags or 'OUTLINE')
 	end
+	return loaded
 end
 
 -- dialogs
@@ -266,11 +269,17 @@ end
 function addon:UpdateFrameSize()
 	local config = self.db
 	addon:SetHeight( self.textLeft:GetHeight() + config.frameMargin*2 )
-	addon:SetWidth( config.frameWidth or (self.textLeft:GetWidth() * 1.75) + config.frameMargin*2 )
-	addon:SetScript('OnUpdate', function(self)
-		self:SetScript('OnUpdate', nil)
-		self:SetAlpha(1)
-	end)
+	addon:SetWidth( config.frameWidth or (self.textLeft:GetWidth() * 1.50) + config.frameMargin*2 )
+	self:SetScript('OnUpdate', nil)
+end
+
+-- update text fonts
+function addon:UpdateFrameFonts()
+	local config = addon.db
+	local l = SetTextFont(self.textLeft, config.fontName, config.fontSize, 'OUTLINE')
+	local r = SetTextFont(self.textRight, config.fontName, config.fontSize, 'OUTLINE')
+	addon:SetScript("OnUpdate", self.UpdateFrameSize)
+	return l and r
 end
 
 -- change main frame visibility: nil == toggle visibility
@@ -309,7 +318,7 @@ do
 		local dd = self.db.display
 		local bg = self.db.bgTimeStart
 		self.text_mask, self.text_head = '', ''
-		register(false,           "|cFF7FFF72KiwiHonor", "|cFF7FFF72%s|r")
+		register(false, "|cFF7FFF72KiwiHonor", "|cFF7FFF72%s|r")
 		register(dd.battleground, bg and "Bg duration" or "Bg duration (avg)" )
 		register(dd.battleground, bg and "Bg honor" or "Bg honor (avg)")
 		register(dd.battleground, bg and "Bg honor/h" or "Bg honor/h (avg)")
@@ -326,7 +335,6 @@ end
 -- layout main frame
 function addon:LayoutFrame()
 	local config = addon.db
-	-- self:SetAlpha(0)
 	self:SetFrameStrata(config.frameStrata or 'MEDIUM')
 	-- background and border
 	BackdropCfg.edgeFile = config.borderTexture
@@ -354,24 +362,6 @@ function addon:LayoutFrame()
 	addon:SetScript("OnUpdate", self.UpdateFrameSize)
 end
 
-local function safedivceil(dividend, divisor)
-	if dividend and divisor and divisor~=0 then
-		return ceil( dividend / divisor )
-	else
-		return nil
-	end
-end
-
-local function gethph( honor, elapsed, noZero)
-	if honor and elapsed and elapsed>=1 then
-		local hph = ceil( 3600 * honor / elapsed )
-		if (not noZero) or hph~=0 then
-			return hph
-		end
-	end
-	return nil
-end
-
 -- update honor data
 function addon:UpdateHonorStats(wkHonorOpt)
 	if not self._zoneName then return end
@@ -383,11 +373,11 @@ function addon:UpdateHonorStats(wkHonorOpt)
 	local snElapsed = snTimeStart and ctime-snTimeStart or 0
 	local snHonor = snTimeStart and wkHonor-db.snHonorStart
 	local snHPH = gethph(snHonor, snElapsed, true)
-	local bgHonor = (db.bgTimeStart and wkHonor-db.bgHonorStart) or (db.snBgCount and ceil(db.snBgHonor/db.snBgCount))
-	local bgElapsed = (db.bgTimeStart and ctime-db.bgTimeStart) or (db.snBgCount and ceil(db.snBgTime/db.snBgCount))
+	local bgHonor = db.bgTimeStart and wkHonor-db.bgHonorStart or safedivceil(db.snBgHonor,db.snBgCount)
+	local bgElapsed = db.bgTimeStart and ctime-db.bgTimeStart or safedivceil(db.snBgTime,db.snBgCount)
 	local bgHPH = db.bgTimeStart and gethph(bgHonor, bgElapsed) or gethph(db.snBgHonor, db.snBgTime)
 	local wkHonorRemain = db.wkHonorGoal and max(db.wkHonorGoal - wkHonor, 0)
-	local wkHonorTimeRemain = db.wkHonorGoal and ((wkHonorRemain<=0 and 0) or (snHPH and ceil(wkHonorRemain/snHPH*3600)))
+	local wkHonorTimeRemain = db.wkHonorGoal and snHPH and max( safedivceil(wkHonorRemain*3600, snHPH, 0), 0 )
 	local data = self.fmtTable or {}
 	data[#data+1] = self._zoneNameShort
 	if not dp.battleground then data[#data+1] = FmtDurationHM(bgElapsed) end
@@ -456,19 +446,12 @@ end
 -- main frame becomes visible
 addon:SetScript("OnShow", addon.UpdateHonorStats)
 
+-- popup menu
 addon:SetScript("OnMouseUp", function(self, button)
 	if button == 'RightButton' then
 		addon:ShowMenu(true)
 	end
 end)
-
--- combat start
-function addon:PLAYER_REGEN_DISABLED()
-end
-
--- combat end
-function addon:PLAYER_REGEN_ENABLED()
-end
 
 -- zones management
 do
@@ -497,12 +480,8 @@ do
 		self.instanceType = instanceType~='none' and instanceType or nil
 		if instanceType == 'pvp' then
 			self:StartBattleground()
-			self:RegisterEvent("PLAYER_REGEN_DISABLED")
-			self:RegisterEvent("PLAYER_REGEN_ENABLED")
 		else
 			self:FinishBattleground()
-			self:UnregisterEvent("PLAYER_REGEN_DISABLED")
-			self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 		end
 		self:UpdateHonorStats()
 		self:SetShown( self.db.visible )
@@ -510,6 +489,7 @@ do
 end
 addon.PLAYER_ENTERING_WORLD = addon.ZONE_CHANGED_NEW_AREA
 
+-- update honor points
 addon.CHAT_MSG_COMBAT_HONOR_GAIN = addon.UpdateHonorStats
 addon.CHAT_MSG_BG_SYSTEM_NEUTRAL = addon.UpdateHonorStats
 addon.UPDATE_BATTLEFIELD_SCORE   = addon.UpdateHonorStats
@@ -636,182 +616,7 @@ end
 do
 	-- addon.db
 	local config
-	-- popup menu main frame
-	local menuFrame
-	-- generic & enhanced popup menu management code, reusable for other menus
-	local showMenu, refreshMenu, getMenuLevel, getMenuValue
-	do
-		-- workaround for classic submenus bug, level 3 submenu only displays up to 8 items without this
-		local function FixClassicBug(level, count)
-			local name = "DropDownList"..level
-			local frame = _G[name]
-			for index = 1, count do
-				local button = _G[ name.."Button"..index ]
-				if button and frame~=button:GetParent() then
-					button:SetParent(frame)
-				end
-			end
-		end
-		-- color picker management
-		local function picker_get_alpha()
-			local a = ColorPickerFrame.SetupColorPickerAndShow and ColorPickerFrame:GetColorAlpha() or OpacitySliderFrame:GetValue()
-			return WOW_PROJECT_ID~=WOW_PROJECT_MAINLINE and 1-a or a
-		end
-		local function picker_get_prev_color(c)
-			local r, g, b, a
-			if ColorPickerFrame.SetupColorPickerAndShow then
-				r, g, b, a = ColorPickerFrame:GetPreviousValues()
-			else
-				r, g, b, a = c.r, c.g, c.b, c.opacity
-			end
-			return r, g, b, (WOW_PROJECT_ID~=WOW_PROJECT_MAINLINE and 1-a or a)
-		end
-		-- menu initialization: special management of enhanced menuList tables, using fields not supported by the base UIDropDownMenu code.
-		local function initialize( frame, level, menuList )
-			if level then
-				frame.menuValues[level] = UIDROPDOWNMENU_MENU_VALUE
-				local init = menuList.init
-				if init then -- custom initialization function for the menuList
-					init(menuList, level, frame)
-				end
-				if CLASSIC then
-					FixClassicBug(level, #menuList)
-				end
-				for index=1,#menuList do
-					local item = menuList[index]
-					if item.hidden==nil or not item.hidden(item) then
-						if item.useParentValue then -- use the value of the parent popup, needed to make splitMenu() transparent
-							item.value = UIDROPDOWNMENU_MENU_VALUE
-						end
-						if type(item.text)=='function' then -- save function text in another field for later use
-							item.textf = item.text
-						end
-						if type(item.disabled)=='function' then
-							item.disabledf = item.disabled
-						end
-						if item.disabledf then -- support for functions instead of only booleans
-							item.disabled = item.disabledf(item, level, frame)
-						end
-						if item.textf then -- support for functions instead of only strings
-							item.text = item.textf(item, level, frame)
-						end
-						if item.hasColorSwatch then -- simplified color management, only definition of get&set functions required to retrieve&save the color
-							if not item.swatchFunc then
-								local get, set = item.get, item.set
-								item.swatchFunc  = function() local r,g,b,a = get(item); r,g,b = ColorPickerFrame:GetColorRGB(); set(item,r,g,b,a) end
-								item.opacityFunc = function() local r,g,b = get(item); set(item,r,g,b,picker_get_alpha()); end
-								item.cancelFunc = function(c) set(item, picker_get_prev_color(c)); end
-							end
-							item.r, item.g, item.b, item.opacity = item.get(item)
-							item.opacity = 1 - item.opacity
-						end
-						item.index = index
-						UIDropDownMenu_AddButton(item,level)
-					end
-				end
-			end
-		end
-		-- get the MENU_LEVEL of the specified menu element ( element = DropDownList|button|nil )
-		function getMenuLevel(element)
-			return element and ((element.dropdown and element:GetID()) or element:GetParent():GetID()) or UIDROPDOWNMENU_MENU_LEVEL
-		end
-		-- get the MENU_VALUE of the specified menu element ( element = level|DropDownList|button|nil )
-		function getMenuValue(element)
-			return element and (UIDROPDOWNMENU_OPEN_MENU.menuValues[type(element)=='table' and getMenuLevel(element) or element]) or UIDROPDOWNMENU_MENU_VALUE
-		end
-		-- refresh a submenu ( element = level | button | dropdownlist )
-		function refreshMenu(element, hideChilds)
-			local level = type(element)=='number' and element or getMenuLevel(element)
-			if hideChilds then CloseDropDownMenus(level+1) end
-			local frame = _G["DropDownList"..level]
-			if frame and frame:IsShown() then
-				local _, anchorTo = frame:GetPoint(1)
-				if anchorTo and anchorTo.menuList then
-					ToggleDropDownMenu(level, getMenuValue(level), nil, nil, nil, nil, anchorTo.menuList, anchorTo)
-					return true
-				end
-			end
-		end
-		-- show my enhanced popup menu
-		function showMenu(menuList, menuFrame, anchor, x, y, autoHideDelay )
-			menuFrame = menuFrame or CreateFrame("Frame", "KiwiFarmPopupMenu", UIParent, "UIDropDownMenuTemplate")
-			menuFrame.displayMode = "MENU"
-			menuFrame.menuValues = menuFrame.menuValues  or {}
-			UIDropDownMenu_Initialize(menuFrame, initialize, "MENU", nil, menuList);
-			ToggleDropDownMenu(1, nil, menuFrame, anchor, x, y, menuList, nil, autoHideDelay);
-		end
-	end
-	-- menu definition helper functions
-	local defMenuStart, defMenuAdd, defMenuEnd, splitMenu, wipeMenu
-	do
-		-- store unused tables to avoid generate garbage
-		local tables = {}
-		-- clear menu table, preserving special control fields
-		function wipeMenu(menu)
-			local init = menu.init;	wipe(menu); menu.init = init
-		end
-		--
-		local function strfirstword(str)
-			return strmatch(str, "^(.-) ") or str
-		end
-		-- split a big menu items table in several submenus
-		function splitMenu(menu, fsort, fdisp)
-			local count = #menu
-			if count>1 then
-				fsort = fsort or 'text'
-				fdisp = fdisp or fsort
-				table.sort(menu, function(a,b) return a[fsort]<b[fsort] end )
-				local items, first, last
-				if count>28 then
-					for i=1,count do
-						if not items or #items>=28 then
-							if items then
-								menu[#menu].text = strfirstword(first[fdisp]) .. ' - ' .. strfirstword(last[fdisp])
-							end
-							items = {}
-							tinsert(menu, { notCheckable = true, hasArrow = true, useParentValue = true, menuList = items } )
-							first = menu[1]
-						end
-						last = table.remove(menu,1)
-						tinsert(items, last)
-					end
-					menu[#menu].text = strfirstword(first[fdisp]) .. ' - ' .. strfirstword(last[fdisp])
-					menu._split = true
-					return true
-				end
-			end
-		end
-		-- start menu definition
-		function defMenuStart(menu)
-			local split = menu._split
-			for _,item in ipairs(menu) do
-				if split and item.menuList then
-					for _,item in ipairs(item.menuList) do
-						tables[#tables+1] = item; wipe(item)
-					end
-				end
-				tables[#tables+1] = item; wipe(item)
-			end
-			wipeMenu(menu)
-		end
-		-- add an item to the menu
-		function defMenuAdd(menu, text, value, menuList)
-			local item = tremove(tables) or {}
-			item.text, item.value, item.notCheckable, item.menuList, item.hasArrow = text, value, true, menuList, (menuList~=nil) or nil
-			menu[#menu+1] = item
-			return item
-		end
-		-- end menu definition
-		function defMenuEnd(menu, text)
-			if #menu==0 and text then
-				menu[1] = tremove(tables) or {}
-				menu[1].text, menu[1].notCheckable = text, true
-			end
-		end
-	end
-
 	-- here starts the definition of the KiwiFrame menu
-	local openedFromMain -- was the menu opened from the main window ?
 	local function SetWidth(info)
 		config.frameWidth = info.value~=0 and math.max( (config.frameWidth or addon:GetWidth()) + info.value, 50) or nil
 		addon:LayoutFrame()
@@ -847,6 +652,22 @@ do
 		addon:LayoutFrame()
 		addon:UpdateHonorStats()
 	end
+	local function FontSet(info)
+		config.fontName = info.value
+		addon:UpdateFrameFonts()
+		lkm:refreshMenu()
+	end
+	local function FontChecked(info)
+		return info.value == (config.fontName or lkm.FONTS.Arial)
+	end
+	local function BorderSet(info)
+		config.borderTexture = info.value~='' and info.value or nil
+		addon:LayoutFrame()
+		lkm:refreshMenu()
+	end
+	local function BorderChecked(info)
+		return info.value == (config.borderTexture or '')
+	end
 	local function ResetSession()
 		if addon.db.snTimeStart then
 			addon:ConfirmDialog( L["Are you sure you want to finish the session?"], function() addon:FinishSession(); end)
@@ -860,81 +681,6 @@ do
 			addon:UpdateHonorStats()
 		end)
 	end
-
-	-- submenu: fonts
-	local menuFonts
-	do
-		local function set(info)
-			config.fontName = info.value
-			addon:LayoutFrame()
-			refreshMenu()
-		end
-		local function checked(info)
-			return info.value == (config.fontName or FONTS.Arial)
-		end
-		menuFonts  = { init = function(menu)
-			local media = LibStub("LibSharedMedia-3.0", true)
-			for name, key in pairs(media and media:HashTable('font') or FONTS) do
-				tinsert( menu, { text = name, value = key, keepShownOnClick = 1, func = set, checked = checked } )
-			end
-			splitMenu(menu)
-			menu.init = nil -- do not call this init function anymore
-		end }
-	end
-
-	-- submenu: background textures
-	local menuBorderTextures
-	do
-		local function set(info)
-			config.borderTexture = info.value~='' and info.value or nil
-			addon:LayoutFrame()
-			refreshMenu()
-		end
-		local function checked(info)
-			return info.value == (config.borderTexture or '')
-		end
-		menuBorderTextures  = { init = function(menu)
-			local media = LibStub("LibSharedMedia-3.0", true)
-			for name, key in pairs(media and media:HashTable('border') or BORDERS) do
-				tinsert( menu, { text = name, value = key, keepShownOnClick = 1, func = set, checked = checked } )
-			end
-			splitMenu(menu)
-			menu.init = nil -- do not call this init function anymore
-		end }
-	end
-
-	-- submenu: sounds
-	local menuSounds
-	do
-		-- groupKey = qualityID | 'price'
-		local function set(info)
-			local sound, groupKey = info.value, getMenuValue(info)
-			notify.sound[groupKey] = sound
-			PlaySoundFile(sound,"master")
-			refreshMenu()
-		end
-		local function checked(info)
-			local sound, groupKey = info.value, getMenuValue(info)
-			return notify.sound[groupKey] == sound
-		end
-		menuSounds = { init = function(menu)
-			local blacklist = { ['None']=true, ['BugSack: Fatality']=true }
-			local media = LibStub("LibSharedMedia-3.0", true)
-			if media then
-				for name,fileID in pairs(SOUNDS) do
-					media:Register("sound", name, fileID)
-				end
-			end
-			for name, key in pairs(media and media:HashTable('sound') or SOUNDS) do
-				if not blacklist[name] then
-					tinsert( menu, { text = name, value = key, arg1=strlower(name), func = set, checked = checked, keepShownOnClick = 1 } )
-				end
-			end
-			splitMenu(menu, 'arg1', 'text')
-			menu.init = nil -- do not call this init function anymore
-		end }
-	end
-
 	-- menu: main
 	local menuMain = {
 		{ text = L['Kiwi Honor [/khonor]'], notCheckable = true, isTitle = true },
@@ -944,10 +690,6 @@ do
 		{ text = L['Battleground'], value = 'battleground', isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
 		{ text = L['Session'],      value = 'session',      isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
 		{ text = L['Honor'], value = 'honor',  isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-		-- { text = L['Honor/hour'],   value = 'honor_hour',   isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-		--{ text = L['Honor week'],   value = 'honor_week',   isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-		--{ text = L['Honor remain'], value = 'honor_remain', isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-		--{ text = L['Honor time'],   value = 'honor_time',   isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
 		{ text = L['Settings'], notCheckable = true, isTitle = true },
 		{ text = L['Frame appearance'], notCheckable = true, hasArrow = true, menuList = {
 			{ text = L['Frame Strata'], notCheckable= true, hasArrow = true, menuList = {
@@ -981,8 +723,8 @@ do
 				{ text = L['Decrease(-)'],  value = -1,  notCheckable= true, keepShownOnClick=1, func = SetFontSize },
 				{ text = L['Default (14)'], value =  0,  notCheckable= true, keepShownOnClick=1, func = SetFontSize },
 			} },
-			{ text = L['Text Font'], notCheckable= true, hasArrow = true, menuList = menuFonts },
-			{ text = L['Border Texture'], notCheckable= true, hasArrow = true, menuList = menuBorderTextures },
+			{ text = L['Text Font'], notCheckable= true, hasArrow = true, menuList = lkm:defMenuFonts(FontSet, FontChecked) },
+			{ text = L['Border Texture'], notCheckable= true, hasArrow = true, menuList = lkm:defMenuBorderTextures(BorderSet, BorderChecked) },
 			{ text =L['Border color '], notCheckable = true, hasColorSwatch = true, hasOpacity = true,
 				get = function() return unpack(config.borderColor) end,
 				set = function(info, ...) config.borderColor = {...}; addon:LayoutFrame(); end,
@@ -992,11 +734,10 @@ do
 				set = function(info, ...) config.backColor = {...}; addon:LayoutFrame(); end,
 			},
 		} },
-		{ text = L['Hide Frame'], notCheckable = true, hidden = function() return not openedFromMain end, func = function() addon:ToggleFrameVisibility(false); end },
+		{ text = L['Hide Frame'], notCheckable = true, hidden = function() return not addon:IsVisible() end, func = function() addon:ToggleFrameVisibility(false); end },
 	}
 	function addon:ShowMenu(fromMain)
 		config = self.db
-		openedFromMain = fromMain
-		showMenu(menuMain, menuFrame, "cursor", 0 , 0)
+		lkm:showMenu(menuMain, "KiwiHonorPopupMenu", "cursor", 0 , 0)
 	end
 end
