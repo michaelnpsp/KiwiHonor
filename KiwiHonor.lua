@@ -150,14 +150,12 @@ local function safedivceil(dividend, divisor, default)
 end
 
 -- calculate honor per hour
-local function gethph( honor, elapsed, noZero)
-	if honor and elapsed and elapsed>=1 then
-		local hph = ceil( 3600 * honor / elapsed )
-		if (not noZero) or hph~=0 then
-			return hph
-		end
+local function gethph(honor, elapsed)
+	if honor and elapsed then
+		return elapsed>0 and ceil(3600*honor/elapsed) or 0
+	else
+		return nil
 	end
-	return nil
 end
 
 -- format duration
@@ -369,28 +367,34 @@ function addon:UpdateHonorStats(wkHonorOpt)
 	local dp = db.display
 	local ctime = time()
 	local wkHonor = tonumber(wkHonorOpt) or GetWeekHonor()
+	-- session
 	local snTimeStart = db.snTimeStart
 	local snElapsed = snTimeStart and ctime-snTimeStart or 0
 	local snHonor = snTimeStart and wkHonor-db.snHonorStart
-	local snHPH = gethph(snHonor, snElapsed, true)
-	local bgHonor = db.bgTimeStart and wkHonor-db.bgHonorStart or safedivceil(db.snBgHonor,db.snBgCount)
-	local bgElapsed = db.bgTimeStart and ctime-db.bgTimeStart or safedivceil(db.snBgTime,db.snBgCount)
-	local bgHPH = db.bgTimeStart and gethph(bgHonor, bgElapsed) or gethph(db.snBgHonor, db.snBgTime)
+	local snHPH = snTimeStart and gethph(snHonor, snElapsed)
+	local bgTimeStart = db.bgTimeStart
+	-- current bg
+	local bgHonor = bgTimeStart and wkHonor-db.bgHonorStart or safedivceil(db.snBgHonor,db.snBgCount)
+	local bgElapsed = bgTimeStart and ctime-bgTimeStart or safedivceil(db.snBgTime,db.snBgCount)
+	local bgHPH = bgTimeStart and gethph(bgHonor, bgElapsed) or gethph(db.snBgHonor, db.snBgTime)
+	-- week honor
 	local wkHonorRemain = db.wkHonorGoal and max(db.wkHonorGoal - wkHonor, 0)
-	local wkHonorTimeRemain = db.wkHonorGoal and snHPH and max( safedivceil(wkHonorRemain*3600, snHPH, 0), 0 )
-	local data = self.fmtTable or {}
-	data[#data+1] = self._zoneNameShort
+	local wkHonorTimeRemain = wkHonorRemain and safedivceil(wkHonorRemain*3600, snHPH)
+	-- display
+	local data = self.fmtTable
+	if not dp.zone         then data[#data+1] = self._zoneNameShort end
 	if not dp.battleground then data[#data+1] = FmtDurationHM(bgElapsed) end
 	if not dp.battleground then data[#data+1] = FmtHonor(bgHonor) end
 	if not dp.battleground then data[#data+1] = FmtHonor(bgHPH) end
 	if not dp.session      then data[#data+1] = FmtDurationHM(snTimeStart and snElapsed) end
-	if not dp.session      then data[#data+1] = FmtHonor(snTimeStart and snHonor) end
+	if not dp.session      then data[#data+1] = FmtHonor(snHonor) end
 	if not dp.session      then data[#data+1] = FmtHonor(snHPH) end
 	if not dp.honor        then data[#data+1] = FmtHonor(wkHonor~=0 and wkHonor) end
 	if not dp.honor        then data[#data+1] = FmtHonor(wkHonorRemain) end
 	if not dp.honor        then data[#data+1] = FmtCountdownHM(wkHonorTimeRemain) end
 	self.textRight:SetFormattedText(self.text_mask, unpack(data))
 	wipe(data)
+	-- update timer
 	if snTimeStart and not self.timerEnabled then self:EnableTimer(ctime) end
 end
 
@@ -521,6 +525,8 @@ addon:SetScript("OnEvent", function(frame, event, name)
 		self:SavePosition()
 		self:RestorePosition()
 	end )
+	-- addon vars
+	addon.fmtTable = {}
 	-- text left
 	addon.textLeft = addon:CreateFontString()
 	-- text right
