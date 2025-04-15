@@ -7,7 +7,7 @@
 ## X-Curse-Project-ID:
 ## X-Wago-ID:
 ## SavedVariables: KiwiHonorDB
-## OptionalDeps: LibSharedMedia-3.0
+## OptionalDeps: Details, LibSharedMedia-3.0
 
 Libs\LibStub\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.xml

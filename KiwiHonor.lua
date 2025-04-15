@@ -76,8 +76,9 @@ local pairs = pairs
 local ipairs = ipairs
 local unpack = unpack
 local select = select
-local tinsert = tinsert
-local tremove = tremove
+local tinsert = table.insert
+local tremove = table.remove
+local tconcat = table.concat
 local tonumber = tonumber
 local gsub = gsub
 local strfind = strfind
@@ -189,19 +190,15 @@ local function FmtHonor(honor)
 	end
 end
 
+-- format zone name
+local function FmtZone(text)
+	return format("|cFF7FFF72%s|r", text)
+end
+
 -- get weekly honor gained
 local function GetWeekHonor()
 	local _, honor = GetPVPThisWeekStats()
 	return honor
-end
-
--- fonts
-local function SetTextFont(widget, name, size, flags)
-	local loaded = widget:SetFont(name or lkm.FONTS.Arial or STANDARD_TEXT_FONT, size or 14, flags or 'OUTLINE')
-	if not widget:GetFont() then
-		widget:SetFont(STANDARD_TEXT_FONT, size or 14, flags or 'OUTLINE')
-	end
-	return loaded
 end
 
 -- dialogs
@@ -240,7 +237,7 @@ end
 -- ============================================================================
 
 function addon:MouseClick(button)
-	if button == 'RightButton' then
+	if button == 'RightButton' or self.plugin then
 		self:ShowMenu()
 	else
 		self:ToggleFrameVisibility()
@@ -249,6 +246,7 @@ end
 
 -- restore main frame position
 function addon:RestorePosition()
+	if self.plugin then return end
 	local config = self.db
 	addon:ClearAllPoints()
 	addon:SetPoint( config.framePos.anchor, UIParent, 'CENTER', config.framePos.x, config.framePos.y )
@@ -256,11 +254,21 @@ end
 
 -- save main frame position
 function addon:SavePosition()
+	if self.plugin then return end
 	local config = self.db
 	local p, cx, cy = config.framePos, UIParent:GetCenter() -- we are assuming addon frame scale=1 in calculations
 	local x = (p.anchor:find("LEFT")   and addon:GetLeft())   or (p.anchor:find("RIGHT") and addon:GetRight()) or addon:GetLeft()+addon:GetWidth()/2
 	local y = (p.anchor:find("BOTTOM") and addon:GetBottom()) or (p.anchor:find("TOP")   and addon:GetTop())   or addon:GetTop() -addon:GetHeight()/2
 	p.x, p.y = x-cx, y-cy
+end
+
+-- font set
+function addon:SetTextFont(widget, name, size, flags)
+	local loaded = widget:SetFont(name or lkm.FONTS.Arial or STANDARD_TEXT_FONT, size or 14, flags or 'OUTLINE')
+	if not widget:GetFont() then
+		widget:SetFont(STANDARD_TEXT_FONT, size or 14, flags or 'OUTLINE')
+	end
+	return loaded
 end
 
 -- frame sizing
@@ -274,8 +282,8 @@ end
 -- update text fonts
 function addon:UpdateFrameFonts()
 	local config = addon.db
-	local l = SetTextFont(self.textLeft, config.fontName, config.fontSize, 'OUTLINE')
-	local r = SetTextFont(self.textRight, config.fontName, config.fontSize, 'OUTLINE')
+	local l = self:SetTextFont(self.textLeft, config.fontName, config.fontSize, 'OUTLINE')
+	local r = self:SetTextFont(self.textRight, config.fontName, config.fontSize, 'OUTLINE')
 	addon:SetScript("OnUpdate", self.UpdateFrameSize)
 	return l and r
 end
@@ -305,97 +313,112 @@ do
 	end
 end
 
--- prepare content to display info
+-- display stats
 do
-	local function register(disabled, left, right)
+	local data_titles = {}
+	local data_values = {}
+
+	local function register(disabled, left)
 		if disabled then return end
-		addon.text_head = addon.text_head .. L[left] .. ":|r\n"
-		addon.text_mask = addon.text_mask .. (right or "%s") .. "\n"
+		data_titles[#data_titles+1] = L[left] .. ':'
 	end
+
+	-- layout content
 	function addon:LayoutContent()
 		local dd = self.db.display
 		local bg = self.db.bgTimeStart
-		self.text_mask, self.text_head = '', ''
-		register(false, "|cFF7FFF72KiwiHonor", "|cFF7FFF72%s|r")
+		wipe(data_titles)
+		register(dd.zone, "|cFF7FFF72KiwiHonor" )
 		register(dd.battleground, bg and "Bg duration" or "Bg duration (avg)" )
 		register(dd.battleground, bg and "Bg honor" or "Bg honor (avg)")
 		register(dd.battleground, bg and "Bg honor/h" or "Bg honor/h (avg)")
 		register(dd.session, "Session duration")
 		register(dd.session, "Session honor")
-		register(dd.session, "Session Honor/h")
+		register(dd.session, "Session honor/h")
 		register(dd.honor, "Honor week")
 		register(dd.honor, "Honor remain")
 		register(dd.honor, "Honor goal in")
-		self.textLeft:SetText(self.text_head)
+		self.textLeft:SetText( tconcat(data_titles,"|r\n") )
 	end
-end
 
--- layout main frame
-function addon:LayoutFrame()
-	local config = addon.db
-	self:SetFrameStrata(config.frameStrata or 'MEDIUM')
-	-- background and border
-	BackdropCfg.edgeFile = config.borderTexture
-	self:SetBackdrop(nil)
-	self:SetBackdrop( config.borderTexture and BackdropCfg or BackdropDef )
-	self:SetBackdropBorderColor( unpack(config.borderColor or COLOR_WHITE) )
-	self:SetBackdropColor( unpack(config.backColor or COLOR_TRANSPARENT) )
-	--
-	local textLeft = self.textLeft
-	textLeft:ClearAllPoints()
-	textLeft:SetPoint('TOPLEFT', config.frameMargin, -config.frameMargin)
-	textLeft:SetJustifyH('LEFT')
-	textLeft:SetJustifyV('TOP')
-	SetTextFont(textLeft, config.fontName, config.fontSize, 'OUTLINE')
-	self:LayoutContent()
-	-- text right
-	local textRight = self.textRight
-	textRight:ClearAllPoints()
-	textRight:SetPoint('TOPRIGHT', -config.frameMargin, -config.frameMargin)
-	textRight:SetPoint('TOPLEFT', config.frameMargin, -config.frameMargin)
-	textRight:SetJustifyH('RIGHT')
-	textRight:SetJustifyV('TOP')
-	SetTextFont(textRight, config.fontName, config.fontSize, 'OUTLINE')
-	-- delayed frame sizing, because textl:GetHeight() returns incorrect height on first login for some fonts.
-	addon:SetScript("OnUpdate", self.UpdateFrameSize)
-end
+	-- update honor data
+	function addon:UpdateHonorStats(wkHonorOpt)
+		if not self._zoneName or not self:IsVisible() then return end
+		local db = self.db
+		local dp = db.display
+		local ctime = time()
+		local wkHonor = tonumber(wkHonorOpt) or GetWeekHonor()
+		-- session
+		local snTimeStart = db.snTimeStart
+		local snElapsed = snTimeStart and ctime-snTimeStart or 0
+		local snHonor = snTimeStart and wkHonor-db.snHonorStart
+		local snHPH = snTimeStart and gethph(snHonor, snElapsed)
+		local bgTimeStart = db.bgTimeStart
+		-- current bg
+		local bgHonor = bgTimeStart and wkHonor-db.bgHonorStart or safedivceil(db.snBgHonor, db.snBgCount)
+		local bgElapsed = bgTimeStart and ctime-bgTimeStart or safedivceil(db.snBgTime, db.snBgCount)
+		local bgHPH = bgTimeStart and gethph(bgHonor, bgElapsed) or gethph(db.snBgHonor, db.snBgTime)
+		-- week honor
+		local wkHonorRemain = db.wkHonorGoal and max(db.wkHonorGoal - wkHonor, 0)
+		local wkHonorTimeRemain = wkHonorRemain and ((wkHonorRemain==0 and 0) or safedivceil(wkHonorRemain*3600, snHPH))
+		-- create datasheet
+		if not dp.zone         then data_values[#data_values+1] = FmtZone(self._zoneNameShort) end
+		if not dp.battleground then data_values[#data_values+1] = FmtDurationHM(bgElapsed) end
+		if not dp.battleground then data_values[#data_values+1] = FmtHonor(bgHonor) end
+		if not dp.battleground then data_values[#data_values+1] = FmtHonor(bgHPH) end
+		if not dp.session      then data_values[#data_values+1] = FmtDurationHM(snTimeStart and snElapsed) end
+		if not dp.session      then data_values[#data_values+1] = FmtHonor(snHonor) end
+		if not dp.session      then data_values[#data_values+1] = FmtHonor(snHPH) end
+		if not dp.honor        then data_values[#data_values+1] = FmtHonor(wkHonor~=0 and wkHonor) end
+		if not dp.honor        then data_values[#data_values+1] = FmtHonor(wkHonorRemain) end
+		if not dp.honor        then data_values[#data_values+1] = FmtCountdownHM(wkHonorTimeRemain) end
+		-- display data
+		self.textRight:SetText( tconcat(data_values,"\n") )
+		wipe(data_values)
+		-- update timer
+		if snTimeStart and not self.timerEnabled then self:EnableTimer(ctime) end
+	end
 
--- update honor data
-function addon:UpdateHonorStats(wkHonorOpt)
-	if not self._zoneName then return end
-	local db = self.db
-	local dp = db.display
-	local ctime = time()
-	local wkHonor = tonumber(wkHonorOpt) or GetWeekHonor()
-	-- session
-	local snTimeStart = db.snTimeStart
-	local snElapsed = snTimeStart and ctime-snTimeStart or 0
-	local snHonor = snTimeStart and wkHonor-db.snHonorStart
-	local snHPH = snTimeStart and gethph(snHonor, snElapsed)
-	local bgTimeStart = db.bgTimeStart
-	-- current bg
-	local bgHonor = bgTimeStart and wkHonor-db.bgHonorStart or safedivceil(db.snBgHonor,db.snBgCount)
-	local bgElapsed = bgTimeStart and ctime-bgTimeStart or safedivceil(db.snBgTime,db.snBgCount)
-	local bgHPH = bgTimeStart and gethph(bgHonor, bgElapsed) or gethph(db.snBgHonor, db.snBgTime)
-	-- week honor
-	local wkHonorRemain = db.wkHonorGoal and max(db.wkHonorGoal - wkHonor, 0)
-	local wkHonorTimeRemain = wkHonorRemain and safedivceil(wkHonorRemain*3600, snHPH)
-	-- display
-	local data = self.fmtTable
-	if not dp.zone         then data[#data+1] = self._zoneNameShort end
-	if not dp.battleground then data[#data+1] = FmtDurationHM(bgElapsed) end
-	if not dp.battleground then data[#data+1] = FmtHonor(bgHonor) end
-	if not dp.battleground then data[#data+1] = FmtHonor(bgHPH) end
-	if not dp.session      then data[#data+1] = FmtDurationHM(snTimeStart and snElapsed) end
-	if not dp.session      then data[#data+1] = FmtHonor(snHonor) end
-	if not dp.session      then data[#data+1] = FmtHonor(snHPH) end
-	if not dp.honor        then data[#data+1] = FmtHonor(wkHonor~=0 and wkHonor) end
-	if not dp.honor        then data[#data+1] = FmtHonor(wkHonorRemain) end
-	if not dp.honor        then data[#data+1] = FmtCountdownHM(wkHonorTimeRemain) end
-	self.textRight:SetFormattedText(self.text_mask, unpack(data))
-	wipe(data)
-	-- update timer
-	if snTimeStart and not self.timerEnabled then self:EnableTimer(ctime) end
+	-- layout main frame
+	function addon:LayoutFrame()
+		local config = addon.db
+		local plugin = self.plugin
+		self:SetFrameStrata(config.frameStrata or 'MEDIUM')
+		-- background and border
+		self:SetBackdrop(nil)
+		if not plugin then
+			BackdropCfg.edgeFile = config.borderTexture
+			self:SetBackdrop( config.borderTexture and BackdropCfg or BackdropDef )
+			self:SetBackdropBorderColor( unpack(config.borderColor or COLOR_WHITE) )
+			self:SetBackdropColor( unpack(config.backColor or COLOR_TRANSPARENT) )
+		end
+		-- text left
+		local textLeft = self.textLeft
+		textLeft:ClearAllPoints()
+		textLeft:SetPoint('TOPLEFT', config.frameMargin, -config.frameMargin)
+		textLeft:SetJustifyH('LEFT')
+		textLeft:SetJustifyV('TOP')
+		textLeft:SetTextColor(1,1,1,1)
+		self:SetTextFont(textLeft, config.fontName, config.fontSize, 'OUTLINE')
+		self:LayoutContent()
+		-- text right
+		local textRight = self.textRight
+		textRight:ClearAllPoints()
+		textRight:SetPoint('TOPRIGHT', -config.frameMargin, -config.frameMargin)
+		textRight:SetPoint('TOPLEFT', config.frameMargin, -config.frameMargin)
+		textRight:SetJustifyH('RIGHT')
+		textRight:SetJustifyV('TOP')
+		textRight:SetTextColor(1,1,1,1)
+		self:SetTextFont(textRight, config.fontName, config.fontSize, 'OUTLINE')
+		-- adjust height
+		if plugin then -- details plugin text height
+			local w, h = plugin:GetPluginInstance():GetSize()
+			textLeft:SetHeight(h-config.frameMargin*2)
+			textRight:SetHeight(h-config.frameMargin*2)
+		else -- delayed frame sizing, because textl:GetHeight() returns incorrect height on first login for some fonts.
+			addon:SetScript("OnUpdate", self.UpdateFrameSize)
+		end
+	end
 end
 
 function addon:StartBattleground()
@@ -446,16 +469,6 @@ end
 -- ============================================================================
 -- events
 -- ============================================================================
-
--- main frame becomes visible
-addon:SetScript("OnShow", addon.UpdateHonorStats)
-
--- popup menu
-addon:SetScript("OnMouseUp", function(self, button)
-	if button == 'RightButton' then
-		addon:ShowMenu(true)
-	end
-end)
 
 -- zones management
 do
@@ -512,21 +525,29 @@ addon:SetScript("OnEvent", function(frame, event, name)
 	if not (addon.__loaded and IsLoggedIn()) then return end
 	-- unregister init events
 	addon:UnregisterAllEvents()
+	-- database setup
+	addon.db = InitDB()
 	-- main frame init
 	addon:Hide()
-	addon:SetSize(1,1)
-	addon:EnableMouse(true)
-	addon:SetMovable(true)
-	addon:RegisterForDrag("LeftButton")
-	addon:SetScript("OnDragStart", addon.StartMoving)
-	addon:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-		self:SetUserPlaced(false)
-		self:SavePosition()
-		self:RestorePosition()
-	end )
-	-- addon vars
-	addon.fmtTable = {}
+	if not addon.db.details then
+		addon:SetSize(1,1)
+		addon:EnableMouse(true)
+		addon:SetMovable(true)
+		addon:RegisterForDrag("LeftButton")
+		addon:SetScript("OnShow", addon.UpdateHonorStats)
+		addon:SetScript("OnDragStart", addon.StartMoving)
+		addon:SetScript("OnDragStop", function(self)
+			self:StopMovingOrSizing()
+			self:SetUserPlaced(false)
+			self:SavePosition()
+			self:RestorePosition()
+		end )
+		addon:SetScript("OnMouseUp", function(self, button)
+			if button == 'RightButton' then
+				addon:ShowMenu(true)
+			end
+		end)
+	end
 	-- text left
 	addon.textLeft = addon:CreateFontString()
 	-- text right
@@ -537,8 +558,6 @@ addon:SetScript("OnEvent", function(frame, event, name)
 	timer.animation:SetDuration(1)
 	timer:SetLooping("REPEAT")
 	timer:SetScript("OnLoop", RefreshText)
-	-- database setup
-	addon.db = InitDB()
 	-- compartment icon
 	if AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
 		AddonCompartmentFrame:RegisterAddon({
@@ -572,6 +591,8 @@ addon:SetScript("OnEvent", function(frame, event, name)
 	addon:RestorePosition()
 	-- frame size & appearance
 	addon:LayoutFrame()
+	--
+	addon:EnableDetailsPlugin()
 end)
 
 -- ============================================================================
@@ -588,7 +609,7 @@ SlashCmdList.KIWIHONOR = function(args)
 	elseif arg1 == 'hide' then
 		addon:Hide()
 	elseif arg1 == 'toggle' then
-		addon:UpdateFrameVisibility()
+		addon:ToggleFrameVisibility()
 	elseif arg1 == 'config' then
 		addon:ShowMenu()
 	elseif arg1 == 'resetpos' then
@@ -674,28 +695,38 @@ do
 	local function BorderChecked(info)
 		return info.value == (config.borderTexture or '')
 	end
-	local function ResetSession()
+	local function ToggleSession()
 		if addon.db.snTimeStart then
-			addon:ConfirmDialog( L["Are you sure you want to finish the session?"], function() addon:FinishSession(); end)
+			addon:ConfirmDialog( L["|cFF7FFF72KiwiHonor|r\nAre you sure you want to finish the session?"], function() addon:FinishSession(); end)
 		else
 			addon:StartSession()
 		end
 	end
 	local function SetHonorGoal()
-		addon:EditDialog(L['|cFF7FFF72KiwiHonor|r\n Set the Weekly Honor Goal:\n'], addon.db.wkHonorGoal or '', function(v)
+		addon:EditDialog(L['|cFF7FFF72KiwiHonor|r\nSet the Weekly Honor Goal:\n'], addon.db.wkHonorGoal or '', function(v)
 			addon.db.wkHonorGoal = tonumber(v) or nil
 			addon:UpdateHonorStats()
 		end)
 	end
-	-- menu: main
-	local menuMain = {
+	local function ToggleDetails()
+		local msg = addon.db.details and
+					L["|cFF7FFF72KiwiHonor|r\nHonor stats will be displayed in a standalone window. Are you sure you want to disable KiwiHonor Details Plugin?"] or
+					L["|cFF7FFF72KiwiHonor|r\nHonor stats will be displayed in a Details window. Are you sure you want to enable KiwiHonor Details Plugin?"]
+		addon:ConfirmDialog( msg, function()
+			addon.db.details = (not addon.db.details) or nil
+			ReloadUI()
+		end)
+	end
+	-- main menu
+	addon.menuMain = {
 		{ text = L['Kiwi Honor [/khonor]'], notCheckable = true, isTitle = true },
-		{ text = function() return addon.db.snTimeStart and L['Session Finish'] or L['Session Start'] end, notCheckable= true, func = ResetSession },
+		{ text = function() return addon.db.snTimeStart and L['Session Finish'] or L['Session Start'] end, notCheckable= true, func = ToggleSession },
 		{ text = L['Set Honor Goal'], notCheckable= true, func = SetHonorGoal },
 		{ text = L['Display'], notCheckable = true, isTitle = true },
+		{ text = L['Zone'],         value = 'zone', isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
 		{ text = L['Battleground'], value = 'battleground', isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
 		{ text = L['Session'],      value = 'session',      isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-		{ text = L['Honor'], value = 'honor',  isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
+		{ text = L['Honor'],        value = 'honor',        isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
 		{ text = L['Settings'], notCheckable = true, isTitle = true },
 		{ text = L['Frame appearance'], notCheckable = true, hasArrow = true, menuList = {
 			{ text = L['Frame Strata'], notCheckable= true, hasArrow = true, menuList = {
@@ -708,11 +739,11 @@ do
 				{ text = L['Top Right'],    value = 'TOPRIGHT',    checked = AnchorChecked, func = SetAnchor },
 				{ text = L['Bottom Left'],  value = 'BOTTOMLEFT',  checked = AnchorChecked, func = SetAnchor },
 				{ text = L['Bottom Right'], value = 'BOTTOMRIGHT', checked = AnchorChecked, func = SetAnchor },
-				{ text = L['Left'],   		 value = 'LEFT',   		checked = AnchorChecked, func = SetAnchor },
-				{ text = L['Right'],  		 value = 'RIGHT',  		checked = AnchorChecked, func = SetAnchor },
-				{ text = L['Top'],    		 value = 'TOP',    		checked = AnchorChecked, func = SetAnchor },
-				{ text = L['Bottom'], 		 value = 'BOTTOM', 		checked = AnchorChecked, func = SetAnchor },
-				{ text = L['Center'], 		 value = 'CENTER', 		checked = AnchorChecked, func = SetAnchor },
+				{ text = L['Left'],   		value = 'LEFT',   	   checked = AnchorChecked, func = SetAnchor },
+				{ text = L['Right'],  		value = 'RIGHT',  	   checked = AnchorChecked, func = SetAnchor },
+				{ text = L['Top'],    		value = 'TOP',    	   checked = AnchorChecked, func = SetAnchor },
+				{ text = L['Bottom'], 		value = 'BOTTOM', 	   checked = AnchorChecked, func = SetAnchor },
+				{ text = L['Center'], 		value = 'CENTER', 	   checked = AnchorChecked, func = SetAnchor },
 			} },
 			{ text = L['Frame Width'], notCheckable= true, hasArrow = true, menuList = {
 				{ text = L['Increase(+)'],   value =  1,  notCheckable= true, keepShownOnClick=1, func = SetWidth },
@@ -727,7 +758,7 @@ do
 			{ text = L['Text Size'], notCheckable= true, hasArrow = true, menuList = {
 				{ text = L['Increase(+)'],  value =  1,  notCheckable= true, keepShownOnClick=1, func = SetFontSize },
 				{ text = L['Decrease(-)'],  value = -1,  notCheckable= true, keepShownOnClick=1, func = SetFontSize },
-				{ text = L['Default (14)'], value =  0,  notCheckable= true, keepShownOnClick=1, func = SetFontSize },
+				{ text = L['Default'], value =  0,  notCheckable= true, keepShownOnClick=1, func = SetFontSize },
 			} },
 			{ text = L['Text Font'], notCheckable= true, hasArrow = true, menuList = lkm:defMenuFonts(FontSet, FontChecked) },
 			{ text = L['Border Texture'], notCheckable= true, hasArrow = true, menuList = lkm:defMenuBorderTextures(BorderSet, BorderChecked) },
@@ -740,10 +771,67 @@ do
 				set = function(info, ...) config.backColor = {...}; addon:LayoutFrame(); end,
 			},
 		} },
-		{ text = L['Hide Frame'], notCheckable = true, hidden = function() return not addon:IsVisible() end, func = function() addon:ToggleFrameVisibility(false); end },
+		{ text = function() return addon.db.details and L['Disable Details Plugin'] or L['Enable Details Plugin'] end, notCheckable = true, func = ToggleDetails },
+		{ text = L['Hide Frame'], notCheckable = true, hidden = function() return not addon:IsVisible() or addon.plugin~=nil end, func = function() addon:ToggleFrameVisibility(false); end },
 	}
-	function addon:ShowMenu(fromMain)
+	-- show menu
+	function addon:ShowMenu()
 		config = self.db
-		lkm:showMenu(menuMain, "KiwiHonorPopupMenu", "cursor", 0 , 0)
+		lkm:showMenu(self.menuMain, "KiwiHonorPopupMenu", "cursor", 0 , 0, 2)
 	end
+end
+
+-- ============================================================================
+-- details plugin
+-- ============================================================================
+
+function KiwiHonor:EnableDetailsPlugin()
+	self.EnableDetailsPlugin = nil
+	if not self.db.details then return end
+	local Details = _G.Details
+	if not Details then
+		print("KiwiHonor warning: this addon is configured as a Details plugin but Details addon is not installed!")
+		return
+	end
+	self:SetScript("OnMouseDown", function(self, button)
+		if button == 'LeftButton' or (button == 'RightButton' and IsShiftKeyDown()) then
+			self:ShowMenu()
+		else
+			self.windowSwitch:GetScript("OnMouseDown")(self.windowSwitch, button)
+		end
+	end)
+	local Plugin = Details:NewPluginObject("Details_KiwiHonor")
+	Plugin:SetPluginDescription("Display battlegrounds Honor stats.")
+	function Plugin:OnDetailsEvent(event, ...)
+		local instance = self:GetPluginInstance()
+		if instance and (event == "SHOW" or instance == select(1,...)) then
+			self.Frame:SetSize(instance:GetSize())
+			KiwiHonor:SetFrameLevel(5)
+			KiwiHonor.windowSwitch = instance.windowSwitchButton
+			KiwiHonor:LayoutFrame()
+			KiwiHonor:UpdateHonorStats()
+		end
+	end
+	local install, saveddata = Details:InstallPlugin("RAID", "KiwiHonor", "Interface\\AddOns\\KiwiHonor\\KiwiHonor.tga", Plugin, "DETAILS_PLUGIN_KIWIHONOR", 1, "MiCHaEL", "v0.1")
+	if type (install) == "table" and install.error then
+		print(install.error)
+	end
+	Details:RegisterEvent(Plugin, "DETAILS_INSTANCE_ENDRESIZE")
+	Details:RegisterEvent(Plugin, "DETAILS_INSTANCE_SIZECHANGED")
+	Details:RegisterEvent(Plugin, "DETAILS_INSTANCE_STARTSTRETCH")
+	Details:RegisterEvent(Plugin, "DETAILS_INSTANCE_ENDSTRETCH")
+	Details:RegisterEvent(Plugin, "DETAILS_OPTIONS_MODIFIED")
+	--
+	self.plugin = Plugin
+	-- reconfigure menu
+	local menuFrame = table.remove(self.menuMain,10).menuList
+	for i=6,4,-1 do
+		table.insert(self.menuMain, 10, menuFrame[i])
+	end
+	-- reparent kiwihonor to details frame
+	self:Hide()
+	self:SetParent(Plugin.Frame)
+	self:ClearAllPoints()
+	self:SetAllPoints()
+	self:Show()
 end
