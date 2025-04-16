@@ -47,6 +47,7 @@ local DEFAULTS = {
 	backColor = {0,0,0,.4},
 	borderColor = {1,1,1,1},
 	borderTexture = nil,
+	spacing = 0,
 	fontName = nil,
 	fontsize = nil,
 	frameMargin = 4,
@@ -290,6 +291,7 @@ end
 
 -- change main frame visibility: nil == toggle visibility
 function addon:ToggleFrameVisibility(visible)
+	if self.plugin then return end
 	if visible == nil then
 		visible = not self:IsShown()
 	end
@@ -399,6 +401,7 @@ do
 		textLeft:SetJustifyH('LEFT')
 		textLeft:SetJustifyV('TOP')
 		textLeft:SetTextColor(1,1,1,1)
+		textLeft:SetSpacing(config.spacing)
 		self:SetTextFont(textLeft, config.fontName, config.fontSize, 'OUTLINE')
 		self:LayoutContent()
 		-- text right
@@ -409,6 +412,7 @@ do
 		textRight:SetJustifyH('RIGHT')
 		textRight:SetJustifyV('TOP')
 		textRight:SetTextColor(1,1,1,1)
+		textRight:SetSpacing(config.spacing)
 		self:SetTextFont(textRight, config.fontName, config.fontSize, 'OUTLINE')
 		-- adjust height
 		if plugin then -- details plugin text height
@@ -576,7 +580,11 @@ addon:SetScript("OnEvent", function(frame, event, name)
 		OnClick = function(_, button) addon:MouseClick(button); end,
 		OnTooltipShow = function(tooltip)
 			tooltip:AddDoubleLine("KiwiHonor", versionStr)
-			tooltip:AddLine(L["|cFFff4040Left Click|r toggle visibility\n|cFFff4040Right Click|r open menu"], 0.2, 1, 0.2)
+			if addon.plugin then
+				tooltip:AddLine(L["|cFFff4040Left or Right Click|r to open menu"], 0.2, 1, 0.2)
+			else
+				tooltip:AddLine(L["|cFFff4040Left Click|r toggle visibility\n|cFFff4040Right Click|r open menu"], 0.2, 1, 0.2)
+			end
 		end,
 	}) , addon.db.minimapIcon)
 	-- events
@@ -651,6 +659,13 @@ do
 	local function SetMargin(info)
 		config.frameMargin = info.value~=0 and math.max( (config.frameMargin or 4) + info.value, 0) or 4
 		addon:LayoutFrame()
+	end
+	local function SetSpacing(info)
+		config.spacing = info.value~=0 and math.max( config.spacing + info.value, 0) or 0
+		addon.textLeft:SetText('')
+		addon.textRight:SetText('')
+		addon:LayoutFrame()
+		addon:UpdateHonorStats()
 	end
 	local function SetFontSize(info)
 		config.fontSize = info.value~=0 and math.max( (config.fontSize or 14) + info.value, 5) or 14
@@ -761,6 +776,11 @@ do
 				{ text = L['Default'], value =  0,  notCheckable= true, keepShownOnClick=1, func = SetFontSize },
 			} },
 			{ text = L['Text Font'], notCheckable= true, hasArrow = true, menuList = lkm:defMenuFonts(FontSet, FontChecked) },
+			{ text = L['Text Spacing'], notCheckable= true, hasArrow = true, menuList = {
+				{ text = L['Increase(+)'],   value =  1,  notCheckable= true, keepShownOnClick=1, func = SetSpacing },
+				{ text = L['Decrease(-)'],   value = -1,  notCheckable= true, keepShownOnClick=1, func = SetSpacing },
+				{ text = L['Default'],       value =  0,  notCheckable= true, keepShownOnClick=1, func = SetSpacing },
+			} },
 			{ text = L['Border Texture'], notCheckable= true, hasArrow = true, menuList = lkm:defMenuBorderTextures(BorderSet, BorderChecked) },
 			{ text =L['Border color '], notCheckable = true, hasColorSwatch = true, hasOpacity = true,
 				get = function() return unpack(config.borderColor) end,
@@ -806,13 +826,13 @@ function KiwiHonor:EnableDetailsPlugin()
 		local instance = self:GetPluginInstance()
 		if instance and (event == "SHOW" or instance == select(1,...)) then
 			self.Frame:SetSize(instance:GetSize())
-			KiwiHonor:SetFrameLevel(5)
-			KiwiHonor.windowSwitch = instance.windowSwitchButton
-			KiwiHonor:LayoutFrame()
-			KiwiHonor:UpdateHonorStats()
+			addon.windowSwitch = instance.windowSwitchButton
+			addon:SetFrameLevel(5)
+			addon:LayoutFrame()
+			addon:UpdateHonorStats()
 		end
 	end
-	local install, saveddata = Details:InstallPlugin("RAID", "KiwiHonor", "Interface\\AddOns\\KiwiHonor\\KiwiHonor.tga", Plugin, "DETAILS_PLUGIN_KIWIHONOR", 1, "MiCHaEL", "v0.1")
+	local install= Details:InstallPlugin("RAID", "KiwiHonor", "Interface\\AddOns\\KiwiHonor\\KiwiHonor.tga", Plugin, "DETAILS_PLUGIN_KIWIHONOR", 1, "MiCHaEL", "v0.1")
 	if type (install) == "table" and install.error then
 		print(install.error)
 	end
@@ -825,9 +845,7 @@ function KiwiHonor:EnableDetailsPlugin()
 	self.plugin = Plugin
 	-- reconfigure menu
 	local menuFrame = table.remove(self.menuMain,10).menuList
-	for i=6,4,-1 do
-		table.insert(self.menuMain, 10, menuFrame[i])
-	end
+	for i=7,4,-1 do	table.insert(self.menuMain, 10, menuFrame[i]); end
 	-- reparent kiwihonor to details frame
 	self:Hide()
 	self:SetParent(Plugin.Frame)
