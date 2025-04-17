@@ -8,6 +8,7 @@ local addonName = ...
 local addon = CreateFrame('Frame', "KiwiHonor", UIParent, BackdropTemplateMixin and "BackdropTemplate")
 
 -- libraries
+local media = LibStub("LibSharedMedia-3.0", true)
 local lkm = LibStub("LibKiwiDropDownMenu-1.0", true)
 
 -- game version
@@ -26,8 +27,10 @@ local versionStr = (versionToc=='\@project-version\@' and 'Dev' or versionToc)
 local playerGUID = UnitGUID("player")
 
 -- default values
+local FONT_SIZE_DEFAULT = 14
 local COLOR_WHITE = { 1,1,1,1 }
 local COLOR_TRANSPARENT = { 0,0,0,0 }
+local TEXTURE_SOLID = "Interface\\Buttons\\WHITE8X8"
 -- database defaults
 local DEFAULTS = {
 	-- honor info
@@ -47,9 +50,12 @@ local DEFAULTS = {
 	backColor = {0,0,0,.4},
 	borderColor = {1,1,1,1},
 	borderTexture = nil,
+	rowEnabled = nil,
+	rowTexture = nil,
+	rowColor = nil,
 	spacing = 0,
 	fontName = nil,
-	fontsize = nil,
+	fontSize = nil,
 	frameMargin = 4,
 	frameStrata = nil,
 	framePos = {anchor='TOPLEFT', x=0, y=0},
@@ -202,6 +208,14 @@ local function GetWeekHonor()
 	return honor
 end
 
+-- font set
+local function SetWidgetFont(widget, name, size)
+	local loaded = widget:SetFont(name or lkm.FONTS.Arial or STANDARD_TEXT_FONT, size or FONT_SIZE_DEFAULT, 'OUTLINE')
+	if not widget:GetFont() then
+		widget:SetFont(STANDARD_TEXT_FONT, size or FONT_SIZE_DEFAULT, 'OUTLINE')
+	end
+end
+
 -- dialogs
 do
 	local DUMMY = function() end
@@ -263,30 +277,24 @@ function addon:SavePosition()
 	p.x, p.y = x-cx, y-cy
 end
 
--- font set
-function addon:SetTextFont(widget, name, size, flags)
-	local loaded = widget:SetFont(name or lkm.FONTS.Arial or STANDARD_TEXT_FONT, size or 14, flags or 'OUTLINE')
-	if not widget:GetFont() then
-		widget:SetFont(STANDARD_TEXT_FONT, size or 14, flags or 'OUTLINE')
-	end
-	return loaded
+-- get font info from config
+function KiwiHonor:GetTextsFontInfo()
+	return self.db.fontName, self.db.fontSize
+end
+
+-- get font info from config
+function KiwiHonor:GetRowsInfo()
+	local color = self.db.rowColor or COLOR_TRANSPARENT
+	local texture = self.db.rowTexture or TEXTURE_SOLID
+	return color, texture
 end
 
 -- frame sizing
 function addon:UpdateFrameSize()
 	local config = self.db
 	addon:SetHeight( self.textLeft:GetHeight() + config.frameMargin*2 )
-	addon:SetWidth( config.frameWidth or (self.textLeft:GetWidth() * 1.50) + config.frameMargin*2 )
+	addon:SetWidth( config.frameWidth or (self.textLeft:GetWidth() * 1.5) + config.frameMargin*2 )
 	self:SetScript('OnUpdate', nil)
-end
-
--- update text fonts
-function addon:UpdateFrameFonts()
-	local config = addon.db
-	local l = self:SetTextFont(self.textLeft, config.fontName, config.fontSize, 'OUTLINE')
-	local r = self:SetTextFont(self.textRight, config.fontName, config.fontSize, 'OUTLINE')
-	addon:SetScript("OnUpdate", self.UpdateFrameSize)
-	return l and r
 end
 
 -- change main frame visibility: nil == toggle visibility
@@ -319,6 +327,7 @@ end
 do
 	local data_titles = {}
 	local data_values = {}
+	local data_rows   = {}
 
 	local function register(disabled, left)
 		if disabled then return end
@@ -340,7 +349,6 @@ do
 		register(dd.honor, "Honor week")
 		register(dd.honor, "Honor remain")
 		register(dd.honor, "Honor goal in")
-		self.textLeft:SetText( tconcat(data_titles,"|r\n") )
 	end
 
 	-- update honor data
@@ -375,25 +383,65 @@ do
 		if not dp.honor        then data_values[#data_values+1] = FmtHonor(wkHonorRemain) end
 		if not dp.honor        then data_values[#data_values+1] = FmtCountdownHM(wkHonorTimeRemain) end
 		-- display data
+		self.textLeft:SetText( tconcat(data_titles,"|r\n") )
 		self.textRight:SetText( tconcat(data_values,"\n") )
 		wipe(data_values)
 		-- update timer
 		if snTimeStart and not self.timerEnabled then self:EnableTimer(ctime) end
 	end
 
+	-- Clear Rows
+	function addon:ClearRows(index)
+		for i=index or 1,#data_rows do
+			data_rows[i]:Hide()
+		end
+	end
+
+	-- Layout Rows
+	function addon:LayoutRows()
+		if not self.db.rowEnabled then return end
+		local sheight = self.textLeft:GetStringHeight()
+		if sheight<=0 then C_Timer.After(0, function() addon:LayoutRows() end); return end
+		local count = #data_titles
+		local spacing = self.db.spacing
+		local height = (sheight - (count-1)*spacing) / count
+		local fheight = height + spacing
+		local rows = math.floor( (self.textLeft:GetHeight()+spacing)/fheight )
+		local margin = self.db.frameMargin
+		local color, texture = self:GetRowsInfo()
+		local offset = 0
+		for i=1,rows do
+			local row = data_rows[i] or self:CreateTexture(nil, "BACKGROUND")
+			row:SetTexture(texture)
+			row:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
+			row:ClearAllPoints()
+			row:SetPoint('TOPLEFT',   margin, -offset-margin)
+			row:SetPoint('TOPRIGHT', -margin, -offset-margin)
+			row:SetHeight(height)
+			row:Show()
+			offset = offset + fheight
+			data_rows[i] = row
+			i = i + 1
+		end
+		self:ClearRows(rows+1)
+	end
+
 	-- layout main frame
 	function addon:LayoutFrame()
 		local config = addon.db
 		local plugin = self.plugin
-		self:SetFrameStrata(config.frameStrata or 'MEDIUM')
-		-- background and border
+		local font, size = self:GetTextsFontInfo()
+		-- background, border, strata
 		self:SetBackdrop(nil)
 		if not plugin then
 			BackdropCfg.edgeFile = config.borderTexture
 			self:SetBackdrop( config.borderTexture and BackdropCfg or BackdropDef )
 			self:SetBackdropBorderColor( unpack(config.borderColor or COLOR_WHITE) )
 			self:SetBackdropColor( unpack(config.backColor or COLOR_TRANSPARENT) )
+			self:SetFrameStrata(config.frameStrata or 'MEDIUM')
 		end
+		-- text preparation
+		self:LayoutContent()
 		-- text left
 		local textLeft = self.textLeft
 		textLeft:ClearAllPoints()
@@ -402,8 +450,8 @@ do
 		textLeft:SetJustifyV('TOP')
 		textLeft:SetTextColor(1,1,1,1)
 		textLeft:SetSpacing(config.spacing)
-		self:SetTextFont(textLeft, config.fontName, config.fontSize, 'OUTLINE')
-		self:LayoutContent()
+		SetWidgetFont(textLeft, font, size)
+		textLeft:SetText('')
 		-- text right
 		local textRight = self.textRight
 		textRight:ClearAllPoints()
@@ -413,7 +461,10 @@ do
 		textRight:SetJustifyV('TOP')
 		textRight:SetTextColor(1,1,1,1)
 		textRight:SetSpacing(config.spacing)
-		self:SetTextFont(textRight, config.fontName, config.fontSize, 'OUTLINE')
+		SetWidgetFont(textRight, font, size)
+		textRight:SetText('')
+		-- display stats
+		self:UpdateHonorStats()
 		-- adjust height
 		if plugin then -- details plugin text height
 			local w, h = plugin:GetPluginInstance():GetSize()
@@ -422,6 +473,7 @@ do
 		else -- delayed frame sizing, because textl:GetHeight() returns incorrect height on first login for some fonts.
 			addon:SetScript("OnUpdate", self.UpdateFrameSize)
 		end
+		self:LayoutRows()
 	end
 end
 
@@ -595,12 +647,11 @@ addon:SetScript("OnEvent", function(frame, event, name)
 	addon:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
 	addon:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
 	addon:RegisterEvent("PLAYER_PVP_KILLS_CHANGED")
-	-- frame position
-	addon:RestorePosition()
-	-- frame size & appearance
-	addon:LayoutFrame()
-	--
-	addon:EnableDetailsPlugin()
+	-- display setup
+	if not addon:EnableDetailsPlugin() then
+		addon:RestorePosition()
+		addon:LayoutFrame()
+	end
 end)
 
 -- ============================================================================
@@ -668,7 +719,8 @@ do
 		addon:UpdateHonorStats()
 	end
 	local function SetFontSize(info)
-		config.fontSize = info.value~=0 and math.max( (config.fontSize or 14) + info.value, 5) or 14
+		local font, size = addon:GetTextsFontInfo()
+		config.fontSize = info.value~=0 and math.max( (size or FONT_SIZE_DEFAULT) + info.value, 5) or nil
 		addon:LayoutFrame()
 	end
 	local function StrataChecked(info)
@@ -695,12 +747,12 @@ do
 		addon:UpdateHonorStats()
 	end
 	local function FontSet(info)
-		config.fontName = info.value
-		addon:UpdateFrameFonts()
+		config.fontName = info.value~='' and info.value or nil
+		addon:LayoutFrame()
 		lkm:refreshMenu()
 	end
 	local function FontChecked(info)
-		return info.value == (config.fontName or lkm.FONTS.Arial)
+		return info.value == (config.fontName or '')
 	end
 	local function BorderSet(info)
 		config.borderTexture = info.value~='' and info.value or nil
@@ -731,6 +783,22 @@ do
 			addon.db.details = (not addon.db.details) or nil
 			ReloadUI()
 		end)
+	end
+	local function RowSet(info)
+		config.rowEnabled = not config.rowEnabled or nil
+		addon:ClearRows()
+		addon:LayoutFrame()
+	end
+	local function RowChecked(info)
+		return config.rowEnabled
+	end
+	local function RowTexSet(info)
+		config.rowTexture = info.value~='' and info.value or nil
+		addon:LayoutFrame()
+		lkm:refreshMenu()
+	end
+	local function RowTexChecked(info)
+		return info.value == (config.rowTexture or '')
 	end
 	-- main menu
 	addon.menuMain = {
@@ -765,23 +833,31 @@ do
 				{ text = L['Decrease(-)'],   value = -1,  notCheckable= true, keepShownOnClick=1, func = SetWidth },
 				{ text = L['Default'],       value =  0,  notCheckable= true, keepShownOnClick=1, func = SetWidth },
 			} },
-			{ text = L['Frame Margin'], notCheckable= true, hasArrow = true, menuList = {
+			{ text = L['Text Margin'], notCheckable= true, hasArrow = true, menuList = {
 				{ text = L['Increase(+)'],   value =  1,  notCheckable= true, keepShownOnClick=1, func = SetMargin },
 				{ text = L['Decrease(-)'],   value = -1,  notCheckable= true, keepShownOnClick=1, func = SetMargin },
 				{ text = L['Default'],       value =  0,  notCheckable= true, keepShownOnClick=1, func = SetMargin },
+			} },
+			{ text = L['Text Spacing'], notCheckable= true, hasArrow = true, menuList = {
+				{ text = L['Increase(+)'],   value =  1,  notCheckable= true, keepShownOnClick=1, func = SetSpacing },
+				{ text = L['Decrease(-)'],   value = -1,  notCheckable= true, keepShownOnClick=1, func = SetSpacing },
+				{ text = L['Default'],       value =  0,  notCheckable= true, keepShownOnClick=1, func = SetSpacing },
 			} },
 			{ text = L['Text Size'], notCheckable= true, hasArrow = true, menuList = {
 				{ text = L['Increase(+)'],  value =  1,  notCheckable= true, keepShownOnClick=1, func = SetFontSize },
 				{ text = L['Decrease(-)'],  value = -1,  notCheckable= true, keepShownOnClick=1, func = SetFontSize },
 				{ text = L['Default'], value =  0,  notCheckable= true, keepShownOnClick=1, func = SetFontSize },
 			} },
-			{ text = L['Text Font'], notCheckable= true, hasArrow = true, menuList = lkm:defMenuFonts(FontSet, FontChecked) },
-			{ text = L['Text Spacing'], notCheckable= true, hasArrow = true, menuList = {
-				{ text = L['Increase(+)'],   value =  1,  notCheckable= true, keepShownOnClick=1, func = SetSpacing },
-				{ text = L['Decrease(-)'],   value = -1,  notCheckable= true, keepShownOnClick=1, func = SetSpacing },
-				{ text = L['Default'],       value =  0,  notCheckable= true, keepShownOnClick=1, func = SetSpacing },
+			{ text = L['Text Font'], notCheckable= true, hasArrow = true, menuList = lkm:defMediaMenu('font', FontSet, FontChecked, 16, { [L['[Default]']] = ''}) },
+			{ text = L['Background Bars'], notCheckable = true, hasArrow = true, menuList = {
+				{ text = L['Display Bars'], keepShownOnClick=1, isNotRadio = true, checked = RowChecked, func = RowSet },
+				{ text = L['Bars Color'], notCheckable = true, hasColorSwatch = true, hasOpacity = true,
+					get = function() return unpack(config.rowColor or {0,0,0,0}) end,
+					set = function(info, ...) config.rowColor = {...}; addon:LayoutFrame(); end,
+				},
+				{ text = L['Bars Texture'], notCheckable= true, hasArrow = true, menuList = lkm:defMediaMenu('statusbar', RowTexSet, RowTexChecked) },
 			} },
-			{ text = L['Border Texture'], notCheckable= true, hasArrow = true, menuList = lkm:defMenuBorderTextures(BorderSet, BorderChecked) },
+			{ text = L['Border Texture'], notCheckable= true, hasArrow = true, menuList = lkm:defMediaMenu('border', BorderSet, BorderChecked) },
 			{ text =L['Border color '], notCheckable = true, hasColorSwatch = true, hasOpacity = true,
 				get = function() return unpack(config.borderColor) end,
 				set = function(info, ...) config.borderColor = {...}; addon:LayoutFrame(); end,
@@ -808,25 +884,39 @@ end
 function KiwiHonor:EnableDetailsPlugin()
 	self.EnableDetailsPlugin = nil
 	if not self.db.details then return end
+	-- access details addon
 	local Details = _G.Details
 	if not Details then
 		print("KiwiHonor warning: this addon is configured as a Details plugin but Details addon is not installed!")
 		return
 	end
+	-- override some functions and scripts
+	function KiwiHonor:GetTextsFontInfo()
+		local font = self.db.fontName or media:Fetch("font", self.instance.row_info.font_face, true)
+		local size = self.db.fontSize or self.instance.row_info.font_size
+		return font, size
+	end
+	function KiwiHonor:GetRowsInfo()
+		local color = self.db.rowColor or self.instance.row_info.fixed_texture_color
+		local texture = self.db.rowTexture or media:Fetch("statusbar", self.instance.row_info.texture, true)
+		return color, texture
+	end
 	self:SetScript("OnMouseDown", function(self, button)
 		if button == 'LeftButton' or (button == 'RightButton' and IsShiftKeyDown()) then
 			self:ShowMenu()
 		else
-			self.windowSwitch:GetScript("OnMouseDown")(self.windowSwitch, button)
+			self.instance.windowSwitchButton:GetScript("OnMouseDown")(self.instance.windowSwitchButton, button)
 		end
 	end)
+	-- create&install details plugin
 	local Plugin = Details:NewPluginObject("Details_KiwiHonor")
 	Plugin:SetPluginDescription("Display battlegrounds Honor stats.")
+	self.plugin = Plugin
 	function Plugin:OnDetailsEvent(event, ...)
 		local instance = self:GetPluginInstance()
 		if instance and (event == "SHOW" or instance == select(1,...)) then
 			self.Frame:SetSize(instance:GetSize())
-			addon.windowSwitch = instance.windowSwitchButton
+			addon.instance = instance
 			addon:SetFrameLevel(5)
 			addon:LayoutFrame()
 			addon:UpdateHonorStats()
@@ -841,15 +931,14 @@ function KiwiHonor:EnableDetailsPlugin()
 	Details:RegisterEvent(Plugin, "DETAILS_INSTANCE_STARTSTRETCH")
 	Details:RegisterEvent(Plugin, "DETAILS_INSTANCE_ENDSTRETCH")
 	Details:RegisterEvent(Plugin, "DETAILS_OPTIONS_MODIFIED")
-	--
-	self.plugin = Plugin
-	-- reconfigure menu
+	-- reconfigure main menu
 	local menuFrame = table.remove(self.menuMain,10).menuList
-	for i=7,4,-1 do	table.insert(self.menuMain, 10, menuFrame[i]); end
+	for i=8,4,-1 do	table.insert(self.menuMain, 10, menuFrame[i]); end
 	-- reparent kiwihonor to details frame
 	self:Hide()
 	self:SetParent(Plugin.Frame)
 	self:ClearAllPoints()
 	self:SetAllPoints()
 	self:Show()
+	return true
 end
