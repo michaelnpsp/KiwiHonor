@@ -23,14 +23,13 @@ local GetAddOnMetadata = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetad
 local versionToc = GetAddOnMetadata(addonName, "Version")
 local versionStr = (versionToc=='\@project-version\@' and 'Dev' or versionToc)
 
--- player GUID
-local playerGUID = UnitGUID("player")
-
 -- default values
-local FONT_SIZE_DEFAULT = 14
-local COLOR_WHITE = { 1,1,1,1 }
-local COLOR_TRANSPARENT = { 0,0,0,0 }
-local TEXTURE_SOLID = "Interface\\Buttons\\WHITE8X8"
+local FONT_SIZE_DEFAULT = 12
+local ROW_TEXTURE_DEFAULT = "Interface\\Buttons\\WHITE8X8"
+local ROW_COLOR_DEFAULT = {.3,.3,.3,1}
+local COLOR_TRANSPARENT = {0,0,0,0}
+local COLOR_WHITE = {1,1,1,1}
+
 -- database defaults
 local DEFAULTS = {
 	-- honor info
@@ -47,7 +46,7 @@ local DEFAULTS = {
 	display = {},
 	-- frame appearance
 	visible = true, -- main frame visibility
-	backColor = {0,0,0,.4},
+	backColor = {0,0,0,.5},
 	borderColor = {1,1,1,1},
 	borderTexture = nil,
 	rowEnabled = nil,
@@ -199,7 +198,7 @@ end
 
 -- format zone name
 local function FmtZone(text)
-	return format("|cFF7FFF72%s|r", text)
+	return format("|cFF7FFF72%s|r", text or '-')
 end
 
 -- get weekly honor gained
@@ -210,7 +209,7 @@ end
 
 -- font set
 local function SetWidgetFont(widget, name, size)
-	local loaded = widget:SetFont(name or lkm.FONTS.Arial or STANDARD_TEXT_FONT, size or FONT_SIZE_DEFAULT, 'OUTLINE')
+	local loaded = widget:SetFont(name or STANDARD_TEXT_FONT, size or FONT_SIZE_DEFAULT, 'OUTLINE')
 	if not widget:GetFont() then
 		widget:SetFont(STANDARD_TEXT_FONT, size or FONT_SIZE_DEFAULT, 'OUTLINE')
 	end
@@ -284,17 +283,17 @@ end
 
 -- get font info from config
 function KiwiHonor:GetRowsInfo()
-	local color = self.db.rowColor or COLOR_TRANSPARENT
-	local texture = self.db.rowTexture or TEXTURE_SOLID
+	local color = self.db.rowColor or ROW_COLOR_DEFAULT
+	local texture = self.db.rowTexture or ROW_TEXTURE_DEFAULT
 	return color, texture
 end
 
 -- frame sizing
 function addon:UpdateFrameSize()
 	local config = self.db
-	addon:SetHeight( self.textLeft:GetHeight() + config.frameMargin*2 )
-	addon:SetWidth( config.frameWidth or (self.textLeft:GetWidth() * 1.5) + config.frameMargin*2 )
-	self:SetScript('OnUpdate', nil)
+	self:SetHeight( self.textLeft:GetHeight() + config.frameMargin*2 )
+	self:SetWidth( config.frameWidth or (self.textLeft:GetWidth() * 1.5) + config.frameMargin*2 )
+	self:SetScript("OnUpdate", nil)
 end
 
 -- change main frame visibility: nil == toggle visibility
@@ -340,15 +339,16 @@ do
 		local bg = self.db.bgTimeStart
 		wipe(data_titles)
 		register(dd.zone, "|cFF7FFF72KiwiHonor" )
-		register(dd.battleground, bg and "Bg duration" or "Bg duration (avg)" )
-		register(dd.battleground, bg and "Bg honor" or "Bg honor (avg)")
-		register(dd.battleground, bg and "Bg honor/h" or "Bg honor/h (avg)")
-		register(dd.session, "Session duration")
-		register(dd.session, "Session honor")
-		register(dd.session, "Session honor/h")
-		register(dd.honor, "Honor week")
-		register(dd.honor, "Honor remain")
-		register(dd.honor, "Honor goal in")
+		register(dd.bg_duration, bg and "Bg duration" or "Bg duration (avg)" )
+		register(dd.bg_honor, bg and "Bg honor" or "Bg honor (avg)")
+		register(dd.bg_hph, bg and "Bg honor/h" or "Bg honor/h (avg)")
+		register(dd.sn_duration, "Session duration")
+		register(dd.sn_honor, "Session honor")
+		register(dd.sn_hph, "Session honor/h")
+		register(dd.hr_week, "Honor week")
+		register(dd.hr_remain, "Honor remain")
+		register(dd.hr_goalin, "Honor goal in")
+		self.textLeft:SetText( tconcat(data_titles,"|r\n") )
 	end
 
 	-- update honor data
@@ -373,17 +373,16 @@ do
 		local wkHonorTimeRemain = wkHonorRemain and ((wkHonorRemain==0 and 0) or safedivceil(wkHonorRemain*3600, snHPH))
 		-- create datasheet
 		if not dp.zone         then data_values[#data_values+1] = FmtZone(self._zoneNameShort) end
-		if not dp.battleground then data_values[#data_values+1] = FmtDurationHM(bgElapsed) end
-		if not dp.battleground then data_values[#data_values+1] = FmtHonor(bgHonor) end
-		if not dp.battleground then data_values[#data_values+1] = FmtHonor(bgHPH) end
-		if not dp.session      then data_values[#data_values+1] = FmtDurationHM(snTimeStart and snElapsed) end
-		if not dp.session      then data_values[#data_values+1] = FmtHonor(snHonor) end
-		if not dp.session      then data_values[#data_values+1] = FmtHonor(snHPH) end
-		if not dp.honor        then data_values[#data_values+1] = FmtHonor(wkHonor~=0 and wkHonor) end
-		if not dp.honor        then data_values[#data_values+1] = FmtHonor(wkHonorRemain) end
-		if not dp.honor        then data_values[#data_values+1] = FmtCountdownHM(wkHonorTimeRemain) end
+		if not dp.bg_duration  then data_values[#data_values+1] = FmtDurationHM(bgElapsed) end
+		if not dp.bg_honor     then data_values[#data_values+1] = FmtHonor(bgHonor) end
+		if not dp.bg_hph       then data_values[#data_values+1] = FmtHonor(bgHPH) end
+		if not dp.sn_duration  then data_values[#data_values+1] = FmtDurationHM(snTimeStart and snElapsed) end
+		if not dp.sn_honor     then data_values[#data_values+1] = FmtHonor(snHonor) end
+		if not dp.sn_hph       then data_values[#data_values+1] = FmtHonor(snHPH) end
+		if not dp.hr_week      then data_values[#data_values+1] = FmtHonor(wkHonor~=0 and wkHonor) end
+		if not dp.hr_remain    then data_values[#data_values+1] = FmtHonor(wkHonorRemain) end
+		if not dp.hr_goalin    then data_values[#data_values+1] = FmtCountdownHM(wkHonorTimeRemain) end
 		-- display data
-		self.textLeft:SetText( tconcat(data_titles,"|r\n") )
 		self.textRight:SetText( tconcat(data_values,"\n") )
 		wipe(data_values)
 		-- update timer
@@ -406,7 +405,7 @@ do
 		local spacing = self.db.spacing
 		local height = (sheight - (count-1)*spacing) / count
 		local fheight = height + spacing
-		local rows = math.floor( (self.textLeft:GetHeight()+spacing)/fheight )
+		local rows = math.floor( (self.textLeft:GetHeight()+spacing)/fheight + 0.01 )
 		local margin = self.db.frameMargin
 		local color, texture = self:GetRowsInfo()
 		local offset = 0
@@ -440,8 +439,6 @@ do
 			self:SetBackdropColor( unpack(config.backColor or COLOR_TRANSPARENT) )
 			self:SetFrameStrata(config.frameStrata or 'MEDIUM')
 		end
-		-- text preparation
-		self:LayoutContent()
 		-- text left
 		local textLeft = self.textLeft
 		textLeft:ClearAllPoints()
@@ -452,6 +449,8 @@ do
 		textLeft:SetSpacing(config.spacing)
 		SetWidgetFont(textLeft, font, size)
 		textLeft:SetText('')
+		-- display headers
+		self:LayoutContent()
 		-- text right
 		local textRight = self.textRight
 		textRight:ClearAllPoints()
@@ -471,7 +470,7 @@ do
 			textLeft:SetHeight(h-config.frameMargin*2)
 			textRight:SetHeight(h-config.frameMargin*2)
 		else -- delayed frame sizing, because textl:GetHeight() returns incorrect height on first login for some fonts.
-			addon:SetScript("OnUpdate", self.UpdateFrameSize)
+			self:SetScript("OnUpdate", self.UpdateFrameSize)
 		end
 		self:LayoutRows()
 	end
@@ -608,12 +607,6 @@ addon:SetScript("OnEvent", function(frame, event, name)
 	addon.textLeft = addon:CreateFontString()
 	-- text right
 	addon.textRight = addon:CreateFontString()
-	-- timer
-	timer = addon:CreateAnimationGroup()
-	timer.animation = timer:CreateAnimation()
-	timer.animation:SetDuration(1)
-	timer:SetLooping("REPEAT")
-	timer:SetScript("OnLoop", RefreshText)
 	-- compartment icon
 	if AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
 		AddonCompartmentFrame:RegisterAddon({
@@ -798,19 +791,26 @@ do
 		lkm:refreshMenu()
 	end
 	local function RowTexChecked(info)
-		return info.value == (config.rowTexture or '')
+		return info.value == (config.rowTexture or ROW_TEXTURE_DEFAULT)
 	end
 	-- main menu
 	addon.menuMain = {
 		{ text = L['Kiwi Honor [/khonor]'], notCheckable = true, isTitle = true },
 		{ text = function() return addon.db.snTimeStart and L['Session Finish'] or L['Session Start'] end, notCheckable= true, func = ToggleSession },
 		{ text = L['Set Honor Goal'], notCheckable= true, func = SetHonorGoal },
-		{ text = L['Display'], notCheckable = true, isTitle = true },
-		{ text = L['Zone'],         value = 'zone', isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-		{ text = L['Battleground'], value = 'battleground', isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-		{ text = L['Session'],      value = 'session',      isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-		{ text = L['Honor'],        value = 'honor',        isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
 		{ text = L['Settings'], notCheckable = true, isTitle = true },
+		{ text = L['Display'], notCheckable = true, hasArrow = true, menuList = {
+			{ text = L['Zone'],             value = 'zone',        isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
+			{ text = L['BG duration'],      value = 'bg_duration', isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
+			{ text = L['BG honor'],         value = 'bg_honor',    isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
+			{ text = L['BG honor/h'],       value = 'bg_hph',      isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
+			{ text = L['Session duration'], value = 'sn_duration', isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
+			{ text = L['Session honor'],    value = 'sn_honor',    isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
+			{ text = L['Session honor/h'],  value = 'sn_hph',      isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
+			{ text = L['Honor week'],       value = 'hr_week',     isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
+			{ text = L['Honor remain'],     value = 'hr_remain',   isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
+			{ text = L['Honor goal in'],    value = 'hr_goalin',   isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
+		} },
 		{ text = L['Frame appearance'], notCheckable = true, hasArrow = true, menuList = {
 			{ text = L['Frame Strata'], notCheckable= true, hasArrow = true, menuList = {
 				{ text = L['HIGH'],    value = 'HIGH',   checked = StrataChecked, func = SetStrata },
@@ -852,7 +852,7 @@ do
 			{ text = L['Background Bars'], notCheckable = true, hasArrow = true, menuList = {
 				{ text = L['Display Bars'], keepShownOnClick=1, isNotRadio = true, checked = RowChecked, func = RowSet },
 				{ text = L['Bars Color'], notCheckable = true, hasColorSwatch = true, hasOpacity = true,
-					get = function() return unpack(config.rowColor or {0,0,0,0}) end,
+					get = function() return unpack(config.rowColor or ROW_COLOR_DEFAULT) end,
 					set = function(info, ...) config.rowColor = {...}; addon:LayoutFrame(); end,
 				},
 				{ text = L['Bars Texture'], notCheckable= true, hasArrow = true, menuList = lkm:defMediaMenu('statusbar', RowTexSet, RowTexChecked) },
@@ -868,7 +868,7 @@ do
 			},
 		} },
 		{ text = function() return addon.db.details and L['Disable Details Plugin'] or L['Enable Details Plugin'] end, notCheckable = true, func = ToggleDetails },
-		{ text = L['Hide Frame'], notCheckable = true, hidden = function() return not addon:IsVisible() or addon.plugin~=nil end, func = function() addon:ToggleFrameVisibility(false); end },
+		{ text = L['Hide Window'], notCheckable = true, hidden = function() return not addon:IsVisible() or addon.plugin~=nil end, func = function() addon:ToggleFrameVisibility(false); end },
 	}
 	-- show menu
 	function addon:ShowMenu()
@@ -896,11 +896,6 @@ function KiwiHonor:EnableDetailsPlugin()
 		local size = self.db.fontSize or self.instance.row_info.font_size
 		return font, size
 	end
-	function KiwiHonor:GetRowsInfo()
-		local color = self.db.rowColor or self.instance.row_info.fixed_texture_color
-		local texture = self.db.rowTexture or media:Fetch("statusbar", self.instance.row_info.texture, true)
-		return color, texture
-	end
 	self:SetScript("OnMouseDown", function(self, button)
 		if button == 'LeftButton' or (button == 'RightButton' and IsShiftKeyDown()) then
 			self:ShowMenu()
@@ -922,7 +917,7 @@ function KiwiHonor:EnableDetailsPlugin()
 			addon:UpdateHonorStats()
 		end
 	end
-	local install= Details:InstallPlugin("RAID", "KiwiHonor", "Interface\\AddOns\\KiwiHonor\\KiwiHonor.tga", Plugin, "DETAILS_PLUGIN_KIWIHONOR", 1, "MiCHaEL", "v0.1")
+	local install= Details:InstallPlugin("RAID", "KiwiHonor", "Interface\\AddOns\\KiwiHonor\\KiwiHonor.tga", Plugin, "DETAILS_PLUGIN_KIWIHONOR", 1, "MiCHaEL", versionStr)
 	if type (install) == "table" and install.error then
 		print(install.error)
 	end
@@ -932,8 +927,8 @@ function KiwiHonor:EnableDetailsPlugin()
 	Details:RegisterEvent(Plugin, "DETAILS_INSTANCE_ENDSTRETCH")
 	Details:RegisterEvent(Plugin, "DETAILS_OPTIONS_MODIFIED")
 	-- reconfigure main menu
-	local menuFrame = table.remove(self.menuMain,10).menuList
-	for i=8,4,-1 do	table.insert(self.menuMain, 10, menuFrame[i]); end
+	local menuFrame = table.remove(self.menuMain,6).menuList
+	for i=8,4,-1 do	table.insert(self.menuMain, 6, menuFrame[i]); end
 	-- reparent kiwihonor to details frame
 	self:Hide()
 	self:SetParent(Plugin.Frame)
