@@ -52,7 +52,7 @@ local DEFAULTS = {
 	rowEnabled = nil,
 	rowTexture = nil,
 	rowColor = nil,
-	spacing = 0,
+	spacing = 1,
 	fontName = nil,
 	fontSize = nil,
 	frameMargin = 4,
@@ -128,25 +128,6 @@ do
 	end
 end
 
--- truncate string
-local strcut
-do
-	local strbyte = string.byte
-	function strcut(s, c)
-		local l, i = #s, 1
-		while c>0 and i<=l do
-			local b = strbyte(s, i)
-			if     b < 192 then	i = i + 1
-			elseif b < 224 then i = i + 2
-			elseif b < 240 then	i = i + 3
-			else				i = i + 4
-			end
-			c = c - 1
-		end
-		return s:sub(1, i-1)
-	end
-end
-
 -- safe rounded division
 local function safedivceil(dividend, divisor, default)
 	if dividend and divisor and divisor~=0 then
@@ -209,7 +190,7 @@ end
 
 -- font set
 local function SetWidgetFont(widget, name, size)
-	local loaded = widget:SetFont(name or STANDARD_TEXT_FONT, size or FONT_SIZE_DEFAULT, 'OUTLINE')
+	widget:SetFont(name or STANDARD_TEXT_FONT, size or FONT_SIZE_DEFAULT, 'OUTLINE')
 	if not widget:GetFont() then
 		widget:SetFont(STANDARD_TEXT_FONT, size or FONT_SIZE_DEFAULT, 'OUTLINE')
 	end
@@ -556,7 +537,7 @@ do
 			self:FinishBattleground()
 		end
 		self:UpdateHonorStats()
-		self:SetShown( self.db.visible )
+		self:SetShown(self.db.visible)
 	end
 end
 addon.PLAYER_ENTERING_WORLD = addon.ZONE_CHANGED_NEW_AREA
@@ -656,10 +637,10 @@ SlashCmdList.KIWIHONOR = function(args)
 	local config = addon.db
 	local arg1,arg2,arg3 = strsplit(" ",args,3)
 	arg1, arg2 = strlower(arg1 or ''), strlower(arg2 or '')
-	if arg1 == 'show' then
-		addon:Show()
-	elseif arg1 == 'hide' then
-		addon:Hide()
+	if arg1 == 'show' and not self.plugin then
+		addon:ToggleFrameVisibility(true)
+	elseif arg1 == 'hide' and not self.plugin then
+		addon:ToggleFrameVisibility(false)
 	elseif arg1 == 'toggle' then
 		addon:ToggleFrameVisibility()
 	elseif arg1 == 'config' then
@@ -696,79 +677,86 @@ do
 	-- addon.db
 	local config
 	-- here starts the definition of the KiwiFrame menu
-	local function SetWidth(info)
+	local function cfgWidth(info)
 		config.frameWidth = info.value~=0 and math.max( (config.frameWidth or addon:GetWidth()) + info.value, 50) or nil
 		addon:LayoutFrame()
 	end
-	local function SetMargin(info)
+	local function cfgMargin(info)
 		config.frameMargin = info.value~=0 and math.max( (config.frameMargin or 4) + info.value, 0) or 4
 		addon:LayoutFrame()
 	end
-	local function SetSpacing(info)
-		config.spacing = info.value~=0 and math.max( config.spacing + info.value, 0) or 0
+	local function cfgSpacing(info)
+		config.spacing = info.value~=0 and math.max( config.spacing + info.value, 0) or 1
 		addon.textLeft:SetText('')
 		addon.textRight:SetText('')
 		addon:LayoutFrame()
 		addon:UpdateHonorStats()
 	end
-	local function SetFontSize(info)
+	local function cfgFontSize(info)
 		local font, size = addon:GetTextsFontInfo()
 		config.fontSize = info.value~=0 and math.max( (size or FONT_SIZE_DEFAULT) + info.value, 5) or nil
 		addon:LayoutFrame()
 	end
-	local function StrataChecked(info)
-		return info.value == (config.frameStrata or 'MEDIUM')
-	end
-	local function SetStrata(info)
+	local function cfgStrata(info,_,_,checked)
+		if checked==nil then return info.value == (config.frameStrata or 'MEDIUM') end
 		config.frameStrata = info.value~='MEDIUM' and info.value or nil
 		addon:LayoutFrame()
 	end
-	local function AnchorChecked(info)
-		return info.value == config.framePos.anchor
-	end
-	local function SetAnchor(info)
+	local function cfgAnchor(info,_,_,checked)
+		if checked==nil then return info.value == config.framePos.anchor end
 		config.framePos.anchor = info.value
 		addon:SavePosition()
 		addon:RestorePosition()
 	end
-	local function DisplayChecked(info)
-		return not addon.db.display[info.value]
-	end
-	local function SetDisplay(info)
+	local function cfgDisplay(info,_,_,checked)
+		if checked==nil then return not addon.db.display[info.value] end
 		addon.db.display[info.value] = not addon.db.display[info.value] or nil
 		addon:LayoutFrame()
 		addon:UpdateHonorStats()
 	end
-	local function FontSet(info)
+	local function cfgFont(info,_,_,checked)
+		if checked==nil then return info.value == (config.fontName or '') end
 		config.fontName = info.value~='' and info.value or nil
 		addon:LayoutFrame()
 		lkm:refreshMenu()
 	end
-	local function FontChecked(info)
-		return info.value == (config.fontName or '')
-	end
-	local function BorderSet(info)
+	local function cfgBorder(info,_,_,checked)
+		if checked==nil then return info.value == (config.borderTexture or '') end
 		config.borderTexture = info.value~='' and info.value or nil
 		addon:LayoutFrame()
 		lkm:refreshMenu()
 	end
-	local function BorderChecked(info)
-		return info.value == (config.borderTexture or '')
+	local function cfgRowEnabled(info,_,_,checked)
+		if checked==nil then return config.rowEnabled end
+		config.rowEnabled = not config.rowEnabled or nil
+		addon:ClearRows()
+		addon:LayoutFrame()
 	end
-	local function ToggleSession()
+	local function cfgRowTexture(info,_,_,checked)
+		if checked==nil then return info.value == (config.rowTexture or ROW_TEXTURE_DEFAULT) end
+		config.rowTexture = info.value~='' and info.value or nil
+		addon:LayoutFrame()
+		lkm:refreshMenu()
+	end
+	local function cfgColor(info, ...)
+		if select('#',...)==0 then return unpack( config[info.value] or ROW_COLOR_DEFAULT ) end
+		config[info.value] = {...}
+		addon:LayoutFrame()
+	end
+	local function cfgToggleSession()
 		if addon.db.snTimeStart then
 			addon:ConfirmDialog( L["|cFF7FFF72KiwiHonor|r\nAre you sure you want to finish the session?"], function() addon:FinishSession(); end)
 		else
 			addon:StartSession()
 		end
 	end
-	local function SetHonorGoal()
+	local function cfgSetHonorGoal()
 		addon:EditDialog(L['|cFF7FFF72KiwiHonor|r\nSet the Weekly Honor Goal:\n'], addon.db.wkHonorGoal or '', function(v)
 			addon.db.wkHonorGoal = tonumber(v) or nil
 			addon:UpdateHonorStats()
 		end)
 	end
-	local function ToggleDetails()
+	local function cfgToggleDetails()
 		local msg = addon.db.details and
 					L["|cFF7FFF72KiwiHonor|r\nHonor stats will be displayed in a standalone window. Are you sure you want to disable KiwiHonor Details Plugin?"] or
 					L["|cFF7FFF72KiwiHonor|r\nHonor stats will be displayed in a Details window. Are you sure you want to enable KiwiHonor Details Plugin?"]
@@ -777,97 +765,56 @@ do
 			ReloadUI()
 		end)
 	end
-	local function RowSet(info)
-		config.rowEnabled = not config.rowEnabled or nil
-		addon:ClearRows()
-		addon:LayoutFrame()
-	end
-	local function RowChecked(info)
-		return config.rowEnabled
-	end
-	local function RowTexSet(info)
-		config.rowTexture = info.value~='' and info.value or nil
-		addon:LayoutFrame()
-		lkm:refreshMenu()
-	end
-	local function RowTexChecked(info)
-		return info.value == (config.rowTexture or ROW_TEXTURE_DEFAULT)
-	end
 	-- main menu
 	addon.menuMain = {
 		{ text = L['Kiwi Honor [/khonor]'], notCheckable = true, isTitle = true },
-		{ text = function() return addon.db.snTimeStart and L['Session Finish'] or L['Session Start'] end, notCheckable= true, func = ToggleSession },
-		{ text = L['Set Honor Goal'], notCheckable= true, func = SetHonorGoal },
+		{ text = function() return addon.db.snTimeStart and L['Session Finish'] or L['Session Start'] end, notCheckable= true, func = cfgToggleSession },
+		{ text = L['Set Honor Goal'], notCheckable= true, func = cfgSetHonorGoal },
 		{ text = L['Settings'], notCheckable = true, isTitle = true },
-		{ text = L['Display'], notCheckable = true, hasArrow = true, menuList = {
-			{ text = L['Zone'],             value = 'zone',        isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-			{ text = L['BG duration'],      value = 'bg_duration', isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-			{ text = L['BG honor'],         value = 'bg_honor',    isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-			{ text = L['BG honor/h'],       value = 'bg_hph',      isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-			{ text = L['Session duration'], value = 'sn_duration', isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-			{ text = L['Session honor'],    value = 'sn_honor',    isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-			{ text = L['Session honor/h'],  value = 'sn_hph',      isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-			{ text = L['Honor week'],       value = 'hr_week',     isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-			{ text = L['Honor remain'],     value = 'hr_remain',   isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
-			{ text = L['Honor goal in'],    value = 'hr_goalin',   isNotRadio = true, keepShownOnClick=1, checked = DisplayChecked, func = SetDisplay },
+		{ text = L['Display'], notCheckable = true, menuList = {
+			{ text = L['Zone'],             value = 'zone',        isNotRadio = true, keepShownOnClick=1, cf = cfgDisplay },
+			{ text = L['BG duration'],      value = 'bg_duration', isNotRadio = true, keepShownOnClick=1, cf = cfgDisplay },
+			{ text = L['BG honor'],         value = 'bg_honor',    isNotRadio = true, keepShownOnClick=1, cf = cfgDisplay },
+			{ text = L['BG honor/h'],       value = 'bg_hph',      isNotRadio = true, keepShownOnClick=1, cf = cfgDisplay },
+			{ text = L['Session duration'], value = 'sn_duration', isNotRadio = true, keepShownOnClick=1, cf = cfgDisplay },
+			{ text = L['Session honor'],    value = 'sn_honor',    isNotRadio = true, keepShownOnClick=1, cf = cfgDisplay },
+			{ text = L['Session honor/h'],  value = 'sn_hph',      isNotRadio = true, keepShownOnClick=1, cf = cfgDisplay },
+			{ text = L['Honor week'],       value = 'hr_week',     isNotRadio = true, keepShownOnClick=1, cf = cfgDisplay },
+			{ text = L['Honor remain'],     value = 'hr_remain',   isNotRadio = true, keepShownOnClick=1, cf = cfgDisplay },
+			{ text = L['Honor goal in'],    value = 'hr_goalin',   isNotRadio = true, keepShownOnClick=1, cf = cfgDisplay },
 		} },
-		{ text = L['Frame appearance'], notCheckable = true, hasArrow = true, menuList = {
-			{ text = L['Frame Strata'], notCheckable= true, hasArrow = true, menuList = {
-				{ text = L['HIGH'],    value = 'HIGH',   checked = StrataChecked, func = SetStrata },
-				{ text = L['MEDIUM'],  value = 'MEDIUM', checked = StrataChecked, func = SetStrata },
-				{ text = L['LOW'],     value = 'LOW',  	 checked = StrataChecked, func = SetStrata },
+		{ text = L['Frame appearance'], notCheckable = true, menuList = {
+			{ text = L['Frame Strata'], notCheckable= true, menuList = {
+				{ text = L['HIGH'],    value = 'HIGH',   cf = cfgStrata },
+				{ text = L['MEDIUM'],  value = 'MEDIUM', cf = cfgStrata },
+				{ text = L['LOW'],     value = 'LOW',  	 cf = cfgStrata },
 			} },
-			{ text = L['Frame Anchor'], notCheckable= true, hasArrow = true, menuList = {
-				{ text = L['Top Left'],     value = 'TOPLEFT',     checked = AnchorChecked, func = SetAnchor },
-				{ text = L['Top Right'],    value = 'TOPRIGHT',    checked = AnchorChecked, func = SetAnchor },
-				{ text = L['Bottom Left'],  value = 'BOTTOMLEFT',  checked = AnchorChecked, func = SetAnchor },
-				{ text = L['Bottom Right'], value = 'BOTTOMRIGHT', checked = AnchorChecked, func = SetAnchor },
-				{ text = L['Left'],   		value = 'LEFT',   	   checked = AnchorChecked, func = SetAnchor },
-				{ text = L['Right'],  		value = 'RIGHT',  	   checked = AnchorChecked, func = SetAnchor },
-				{ text = L['Top'],    		value = 'TOP',    	   checked = AnchorChecked, func = SetAnchor },
-				{ text = L['Bottom'], 		value = 'BOTTOM', 	   checked = AnchorChecked, func = SetAnchor },
-				{ text = L['Center'], 		value = 'CENTER', 	   checked = AnchorChecked, func = SetAnchor },
+			{ text = L['Frame Anchor'], notCheckable= true, menuList = {
+				{ text = L['Top Left'],     value = 'TOPLEFT',     cf = cfgAnchor },
+				{ text = L['Top Right'],    value = 'TOPRIGHT',    cf = cfgAnchor },
+				{ text = L['Bottom Left'],  value = 'BOTTOMLEFT',  cf = cfgAnchor },
+				{ text = L['Bottom Right'], value = 'BOTTOMRIGHT', cf = cfgAnchor },
+				{ text = L['Left'],   		value = 'LEFT',   	   cf = cfgAnchor },
+				{ text = L['Right'],  		value = 'RIGHT',  	   cf = cfgAnchor },
+				{ text = L['Top'],    		value = 'TOP',    	   cf = cfgAnchor },
+				{ text = L['Bottom'], 		value = 'BOTTOM', 	   cf = cfgAnchor },
+				{ text = L['Center'], 		value = 'CENTER', 	   cf = cfgAnchor },
 			} },
-			{ text = L['Frame Width'], notCheckable= true, hasArrow = true, menuList = {
-				{ text = L['Increase(+)'],   value =  1,  notCheckable= true, keepShownOnClick=1, func = SetWidth },
-				{ text = L['Decrease(-)'],   value = -1,  notCheckable= true, keepShownOnClick=1, func = SetWidth },
-				{ text = L['Default'],       value =  0,  notCheckable= true, keepShownOnClick=1, func = SetWidth },
+			lkm:defSimpleRangeMenu(L['Frame Width'],  cfgWidth),
+			lkm:defSimpleRangeMenu(L['Text Margin'],  cfgMargin),
+			lkm:defSimpleRangeMenu(L['Text Spacing'], cfgSpacing),
+			lkm:defSimpleRangeMenu(L['Text Size'],    cfgFontSize),
+			{ text = L['Text Font'], notCheckable= true, menuList = lkm:defMediaMenu('font', cfgFont, nil, 16, { [L['[Default]']] = ''}) },
+			{ text = L['Background Bars'], notCheckable = true, menuList = {
+				{ text = L['Display Bars'], keepShownOnClick = 1, isNotRadio = true, cf = cfgRowEnabled },
+				{ text = L['Bars Color'],   notCheckable = true, hasColorSwatch = true, hasOpacity = true, value = 'rowColor', get = cfgColor, set = cfgColor },
+				{ text = L['Bars Texture'], notCheckable = true, menuList = lkm:defMediaMenu('statusbar', cfgRowTexture) },
 			} },
-			{ text = L['Text Margin'], notCheckable= true, hasArrow = true, menuList = {
-				{ text = L['Increase(+)'],   value =  1,  notCheckable= true, keepShownOnClick=1, func = SetMargin },
-				{ text = L['Decrease(-)'],   value = -1,  notCheckable= true, keepShownOnClick=1, func = SetMargin },
-				{ text = L['Default'],       value =  0,  notCheckable= true, keepShownOnClick=1, func = SetMargin },
-			} },
-			{ text = L['Text Spacing'], notCheckable= true, hasArrow = true, menuList = {
-				{ text = L['Increase(+)'],   value =  1,  notCheckable= true, keepShownOnClick=1, func = SetSpacing },
-				{ text = L['Decrease(-)'],   value = -1,  notCheckable= true, keepShownOnClick=1, func = SetSpacing },
-				{ text = L['Default'],       value =  0,  notCheckable= true, keepShownOnClick=1, func = SetSpacing },
-			} },
-			{ text = L['Text Size'], notCheckable= true, hasArrow = true, menuList = {
-				{ text = L['Increase(+)'],  value =  1,  notCheckable= true, keepShownOnClick=1, func = SetFontSize },
-				{ text = L['Decrease(-)'],  value = -1,  notCheckable= true, keepShownOnClick=1, func = SetFontSize },
-				{ text = L['Default'], value =  0,  notCheckable= true, keepShownOnClick=1, func = SetFontSize },
-			} },
-			{ text = L['Text Font'], notCheckable= true, hasArrow = true, menuList = lkm:defMediaMenu('font', FontSet, FontChecked, 16, { [L['[Default]']] = ''}) },
-			{ text = L['Background Bars'], notCheckable = true, hasArrow = true, menuList = {
-				{ text = L['Display Bars'], keepShownOnClick=1, isNotRadio = true, checked = RowChecked, func = RowSet },
-				{ text = L['Bars Color'], notCheckable = true, hasColorSwatch = true, hasOpacity = true,
-					get = function() return unpack(config.rowColor or ROW_COLOR_DEFAULT) end,
-					set = function(info, ...) config.rowColor = {...}; addon:LayoutFrame(); end,
-				},
-				{ text = L['Bars Texture'], notCheckable= true, hasArrow = true, menuList = lkm:defMediaMenu('statusbar', RowTexSet, RowTexChecked) },
-			} },
-			{ text = L['Border Texture'], notCheckable= true, hasArrow = true, menuList = lkm:defMediaMenu('border', BorderSet, BorderChecked) },
-			{ text =L['Border color '], notCheckable = true, hasColorSwatch = true, hasOpacity = true,
-				get = function() return unpack(config.borderColor) end,
-				set = function(info, ...) config.borderColor = {...}; addon:LayoutFrame(); end,
-			},
-			{ text =L['Background color '], notCheckable = true, hasColorSwatch = true, hasOpacity = true,
-				get = function() return unpack(config.backColor) end,
-				set = function(info, ...) config.backColor = {...}; addon:LayoutFrame(); end,
-			},
+			{ text = L['Border Texture'], notCheckable= true, menuList = lkm:defMediaMenu('border', cfgBorder) },
+			{ text =L['Border color '], notCheckable = true, hasColorSwatch = true, hasOpacity = true, value = 'borderColor', get = cfgColor, set = cfgColor },
+			{ text =L['Background color '], notCheckable = true, hasColorSwatch = true, hasOpacity = true, value = 'backColor', get = cfgColor, set = cfgColor },
 		} },
-		{ text = function() return addon.db.details and L['Disable Details Plugin'] or L['Enable Details Plugin'] end, notCheckable = true, func = ToggleDetails },
+		{ text = function() return addon.db.details and L['Disable Details Plugin'] or L['Enable Details Plugin'] end, notCheckable = true, func = cfgToggleDetails },
 		{ text = L['Hide Window'], notCheckable = true, hidden = function() return not addon:IsVisible() or addon.plugin~=nil end, func = function() addon:ToggleFrameVisibility(false); end },
 	}
 	-- show menu
