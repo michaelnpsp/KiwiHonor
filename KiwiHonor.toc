@@ -9,14 +9,21 @@
 ## SavedVariables: KiwiHonorDB
 ## OptionalDeps: Details, LibSharedMedia-3.0
 
+
+#libraries
 Libs\LibStub\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
 Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
 Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
+Libs\AceLocale-3.0\AceLocale-3.0.xml
 Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
 Libs\LibKiwiDropDownMenu-1.0\LibKiwiDropDownMenu-1.0.lua
 Libs\LibKiwiDisplayFrame-1.0\LibKiwiDisplayFrame-1.0.lua
 
+#locales
+locales.xml
+
+#code
 core.lua
 popupmenu.lua
 slashcommand.lua

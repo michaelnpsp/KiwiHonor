@@ -127,9 +127,9 @@ addon.menuMain = {
 	{ text = L['Settings'], isTitle = true },
 	{ text = L['Display'], default = { cf = cfgDisplay, keepShownOnClick = 1, isNotRadio = true }, menuList = {
 		{ text = L['Zone'],             value = 'zone',         },
-		{ text = L['BG duration'],      value = 'bg_duration',  },
-		{ text = L['BG honor'],         value = 'bg_honor',     },
-		{ text = L['BG honor/h'],       value = 'bg_hph',       },
+		{ text = L['Bg duration'],      value = 'bg_duration',  },
+		{ text = L['Bg honor'],         value = 'bg_honor',     },
+		{ text = L['Bg honor/h'],       value = 'bg_hph',       },
 		{ text = L['Session duration'], value = 'sn_duration',  },
 		{ text = L['Session honor'],    value = 'sn_honor',     },
 		{ text = L['Session honor/h'],  value = 'sn_hph',       },

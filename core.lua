@@ -14,7 +14,7 @@ local addon = lkf:CreateFrame(addonName)
 local versionStr = C_AddOns.GetAddOnMetadata(addonName, "Version")
 
 -- localization
-local L = setmetatable( {}, { __index = function(t,k) return k; end } )
+local L = LibStub('AceLocale-3.0'):GetLocale(addonName, true)
 addon.L = L
 
 -- database defaults
