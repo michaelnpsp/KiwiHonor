@@ -11,47 +11,48 @@ local lkf = LibStub("LibKiwiDisplayFrame-1.0", true)
 local addon = lkf:CreateFrame(addonName)
 
 -- addon version
-addon.versionToc = C_AddOns.GetAddOnMetadata(addonName, "Version")
-addon.versionStr = (addon.versionToc=='\@project-version\@' and 'Dev' or addon.versionToc)
-
--- addon icon
-addon.iconFile = "Interface\\AddOns\\KiwiHonor\\KiwiHonor.tga"
+local versionStr = C_AddOns.GetAddOnMetadata(addonName, "Version")
 
 -- localization
 local L = setmetatable( {}, { __index = function(t,k) return k; end } )
 addon.L = L
 
 -- database defaults
-addon.DEFAULTS = {
-	-- honor info
-	bgZoneName = nil,
-	bgTimeStart = nil,
-	bgHonorStart = nil,
-	snTimeStart = nil,
-	snHonorStart = nil,
-	snBgCount = nil,
-	snBgHonor = nil,
-	snBgTime = nil,
-	wkHonorGoal = nil,
-	-- text sections to hide
-	display = {},
+addon.defaults = {
+	-- honor stats
+	stats = {
+		bgZoneName = nil,
+		bgTimeStart = nil,
+		bgHonorStart = nil,
+		snTimeStart = nil,
+		snHonorStart = nil,
+		snBgCount = nil,
+		snBgHonor = nil,
+		snBgTime = nil,
+		wkHonorGoal = nil,
+	},
 	-- frame appearance
-	visible = true, -- main frame visibility
-	backColor = {0,0,0,.5},
-	borderColor = {1,1,1,1},
-	borderTexture = nil,
-	rowEnabled = nil,
-	rowTexture = nil,
-	rowColor = nil,
-	spacing = 1,
-	fontName = nil,
-	fontSize = nil,
-	frameWidth = 2/3,
-	frameMargin = 4,
-	frameStrata = nil,
-	framePos = {anchor='TOPLEFT', x=0, y=0},
+	frame = {
+		visible = true,
+		backColor = {0,0,0,.5},
+		borderColor = {1,1,1,1},
+		borderTexture = nil,
+		rowColor = nil,
+		rowTexture = nil,
+		spacing = 1,
+		fontName = nil,
+		fontSize = nil,
+		frameWidth = 2/3,
+		frameMargin = 4,
+		frameStrata = nil,
+		framePos = {anchor='TOPLEFT', x=0, y=0},
+	},
+	-- text lines to hide
+	display = {},
 	-- minimap icon
 	minimapIcon = {hide=false},
+	-- display as details plugin
+	details = nil,
 }
 
 -- local references
@@ -69,32 +70,14 @@ local C_Timer_After = C_Timer.After
 local GetZoneText = GetZoneText
 local IsInInstance = IsInInstance
 local GetInstanceInfo = GetInstanceInfo
+local GetPVPThisWeekStats = GetPVPThisWeekStats
+
+-- local variables
+local tempTable = {}
 
 -- ============================================================================
 -- utils functions
 -- ============================================================================
-
--- initialize addon database
-local InitDB
-do
-	local function copy(dst, src)
-		for k,v in pairs(src) do
-			if type(v)=="table" then
-				dst[k] = copy(dst[k] or {}, v)
-			elseif dst[k]==nil then
-				dst[k] = v
-			end
-		end
-		return dst
-	end
-	function InitDB()
-		KiwiHonorDB = KiwiHonorDB or {profilePerChar={}}
-		local charKey = UnitName("player") .. " - " .. GetRealmName()
-		local profiles = KiwiHonorDB.profilePerChar
-		profiles[charKey] = copy( profiles[charKey] or {}, addon.DEFAULTS )
-		return profiles[charKey], KiwiHonorDB
-	end
-end
 
 -- safe rounded division
 local function safedivceil(dividend, divisor, default)
@@ -160,14 +143,22 @@ end
 -- addon methods
 -- ============================================================================
 
+function addon:ShowTooltip(tooltip)
+	tooltip:AddDoubleLine(addonName, versionStr)
+	if self.plugin then
+		tooltip:AddLine(L["|cFFff4040Left or Right Click|r to open menu"], 0.2, 1, 0.2)
+	else
+		tooltip:AddLine(L["|cFFff4040Left Click|r toggle visibility\n|cFFff4040Right Click|r open menu"], 0.2, 1, 0.2)
+	end
+end
+
 function addon:LayoutContent()
-	local data_titles = self.data_titles
 	local function register(disabled, left)
 		if disabled then return end
-		data_titles[#data_titles+1] = L[left] .. ':'
+		tempTable[#tempTable+1] = L[left] .. ':'
 	end
 	local dd = self.db.display
-	local bg = self.db.bgTimeStart
+	local bg = self.db.stats.bgTimeStart
 	register(dd.zone, "|cFF7FFF72KiwiHonor" )
 	register(dd.bg_duration, bg and "Bg duration" or "Bg duration (avg)" )
 	register(dd.bg_honor, bg and "Bg honor" or "Bg honor (avg)")
@@ -178,14 +169,14 @@ function addon:LayoutContent()
 	register(dd.hr_week, "Honor week")
 	register(dd.hr_remain, "Honor remain")
 	register(dd.hr_goalin, "Honor goal in")
-	self.textLeft:SetText( tconcat(data_titles,"|r\n") )
-	wipe(data_titles)
+	self.textLeft:SetText( tconcat(tempTable,"|r\n") )
+	wipe(tempTable)
 end
 
 function addon:UpdateContent(wkHonorOpt)
 	if not self._zoneName or not self:IsVisible() then return end
-	local db = self.db
-	local dp = db.display
+	local db = self.db.stats
+	local dp = self.db.display
 	local ctime = time()
 	local wkHonor = tonumber(wkHonorOpt) or GetWeekHonor()
 	-- session
@@ -202,19 +193,18 @@ function addon:UpdateContent(wkHonorOpt)
 	local wkHonorRemain = db.wkHonorGoal and max(db.wkHonorGoal - wkHonor, 0)
 	local wkHonorTimeRemain = wkHonorRemain and ((wkHonorRemain==0 and 0) or safedivceil(wkHonorRemain*3600, snHPH))
 	-- display data
-	local data_values = self.data_values
-	if not dp.zone         then data_values[#data_values+1] = FmtZone(self._zoneNameShort) end
-	if not dp.bg_duration  then data_values[#data_values+1] = FmtDurationHM(bgElapsed) end
-	if not dp.bg_honor     then data_values[#data_values+1] = FmtHonor(bgHonor) end
-	if not dp.bg_hph       then data_values[#data_values+1] = FmtHonor(bgHPH) end
-	if not dp.sn_duration  then data_values[#data_values+1] = FmtDurationHM(snTimeStart and snElapsed) end
-	if not dp.sn_honor     then data_values[#data_values+1] = FmtHonor(snHonor) end
-	if not dp.sn_hph       then data_values[#data_values+1] = FmtHonor(snHPH) end
-	if not dp.hr_week      then data_values[#data_values+1] = FmtHonor(wkHonor~=0 and wkHonor) end
-	if not dp.hr_remain    then data_values[#data_values+1] = FmtHonor(wkHonorRemain) end
-	if not dp.hr_goalin    then data_values[#data_values+1] = FmtCountdownHM(wkHonorTimeRemain) end
-	self.textRight:SetText( tconcat(data_values,"\n") )
-	wipe(data_values)
+	if not dp.zone         then tempTable[#tempTable+1] = FmtZone(self._zoneNameShort) end
+	if not dp.bg_duration  then tempTable[#tempTable+1] = FmtDurationHM(bgElapsed) end
+	if not dp.bg_honor     then tempTable[#tempTable+1] = FmtHonor(bgHonor) end
+	if not dp.bg_hph       then tempTable[#tempTable+1] = FmtHonor(bgHPH) end
+	if not dp.sn_duration  then tempTable[#tempTable+1] = FmtDurationHM(snTimeStart and snElapsed) end
+	if not dp.sn_honor     then tempTable[#tempTable+1] = FmtHonor(snHonor) end
+	if not dp.sn_hph       then tempTable[#tempTable+1] = FmtHonor(snHPH) end
+	if not dp.hr_week      then tempTable[#tempTable+1] = FmtHonor(wkHonor~=0 and wkHonor) end
+	if not dp.hr_remain    then tempTable[#tempTable+1] = FmtHonor(wkHonorRemain) end
+	if not dp.hr_goalin    then tempTable[#tempTable+1] = FmtCountdownHM(wkHonorTimeRemain) end
+	self.textRight:SetText( tconcat(tempTable,"\n") )
+	wipe(tempTable)
 	-- update timer
 	if snTimeStart and not self.timerEnabled then self:EnableTimer(ctime) end
 end
@@ -222,7 +212,7 @@ end
 function addon:EnableTimer(ctime)
 	if self then -- init
 		addon.timerEnabled = true
-	elseif addon.db.snTimeStart and addon:IsVisible() then  -- tick
+	elseif addon.db.stats.snTimeStart and addon:IsVisible() then  -- tick
 		ctime = time()
 		addon:UpdateContent()
 	else
@@ -233,7 +223,7 @@ function addon:EnableTimer(ctime)
 end
 
 function addon:StartBattleground()
-	local db = self.db
+	local db = self.db.stats
 	if db.bgZoneName then return end
 	db.bgZoneName = self._zoneName
 	db.bgTimeStart = time()
@@ -245,7 +235,7 @@ function addon:StartBattleground()
 end
 
 function addon:FinishBattleground()
-	local db = self.db
+	local db = self.db.stats
 	if not db.bgZoneName then return end
 	db.snBgCount = (db.snBgCount or 0) + 1
 	db.snBgTime = (db.snBgTime or 0) + (time()-db.bgTimeStart)
@@ -258,7 +248,7 @@ function addon:FinishBattleground()
 end
 
 function addon:StartSession()
-	local db = self.db
+	local db = self.db.stats
 	db.snBgCount = nil
 	db.snBgHonor = nil
 	db.snBgTime = nil
@@ -268,7 +258,7 @@ function addon:StartSession()
 end
 
 function addon:FinishSession()
-	local db = self.db
+	local db = self.db.stats
 	db.snBgCount = nil
 	db.snBgHonor = nil
 	db.snBgTime = nil
@@ -278,15 +268,8 @@ function addon:FinishSession()
 end
 
 function addon:ZONE_CHANGED_NEW_AREA(event, isLogin)
-	if event=='PLAYER_ENTERING_WORLD' and isLogin and self.db.snTimeStart and time()-self.db.snTimeStart>3600 then
-		self.db.bgZoneName = nil
-		self.db.bgTimeStart = nil
-		self.db.bgHonorStart = nil
-		self.db.snTimeStart = nil
-		self.db.snHonorStart = nil
-		self.db.snBgCount = nil
-		self.db.snBgHonor = nil
-		self.db.snBgTime = nil
+	if event=='PLAYER_ENTERING_WORLD' and isLogin and self.db.stats.snTimeStart and time()-self.db.stats.snTimeStart>3600 then
+		wipe(self.db.stats)
 	end
 	local inInstance, instanceType = IsInInstance()
 	local zone = inInstance and GetInstanceInfo() or GetZoneText()
@@ -305,7 +288,7 @@ function addon:ZONE_CHANGED_NEW_AREA(event, isLogin)
 		self:FinishBattleground()
 	end
 	self:UpdateContent()
-	self:SetShown(self.db.visible)
+	self:SetShown(self.db.frame.visible)
 end
 addon.PLAYER_ENTERING_WORLD = addon.ZONE_CHANGED_NEW_AREA
 
@@ -328,43 +311,19 @@ addon:SetScript("OnEvent", function(frame, event, name)
 	-- unregister init events
 	addon:UnregisterAllEvents()
 	-- database setup
-	addon.db = InitDB()
-	-- temp tables
-	addon.data_titles = {}
-	addon.data_values = {}
+	addon.db = lkf:LoadProfile(addonName..'DB', addon.defaults)
 	-- compartment icon
-	if AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
-		AddonCompartmentFrame:RegisterAddon({
-			text = addonName,
-			icon  = addon.iconFile,
-			registerForAnyClick = true,
-			notCheckable = true,
-			func = function(_,_,_,_,button) addon:MouseClick(button); end,
-		})
-	end
+	lkf:RegisterCompartment(addonName, addon, "MouseClick")
 	-- minimap icon
-	LibStub("LibDBIcon-1.0"):Register(addonName, LibStub("LibDataBroker-1.1"):NewDataObject(addonName, {
-		type  = "launcher",
-		label = C_AddOns.GetAddOnInfo(addonName, "Title"),
-		icon  = addon.iconFile,
-		OnClick = function(_, button) addon:MouseClick(button); end,
-		OnTooltipShow = function(tooltip)
-			tooltip:AddDoubleLine(addonName, addon.versionStr)
-			if addon.plugin then
-				tooltip:AddLine(L["|cFFff4040Left or Right Click|r to open menu"], 0.2, 1, 0.2)
-			else
-				tooltip:AddLine(L["|cFFff4040Left Click|r toggle visibility\n|cFFff4040Right Click|r open menu"], 0.2, 1, 0.2)
-			end
-		end,
-	}) , addon.db.minimapIcon)
+	lkf:RegisterMinimapIcon(addonName, addon, addon.db.minimapIcon, "MouseClick", "ShowTooltip")
 	-- events
-	addon:SetScript('OnEvent', function(self,event,...) self[event](self,event,...) end)
-	addon:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+	addon:SetScript('OnEvent', lkf.DispatchEvent)
 	addon:RegisterEvent("PLAYER_ENTERING_WORLD")
+	addon:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 	addon:RegisterEvent("CHAT_MSG_COMBAT_HONOR_GAIN")
 	addon:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
 	addon:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
 	addon:RegisterEvent("PLAYER_PVP_KILLS_CHANGED")
-	-- display setup
-	lkf:SetupAddon(addon, nil, addon.db.details, addon.iconFile, L["Display battlegrounds Honor stats."], "MiCHaEL", addon.versionStr)
+	-- setup display
+	lkf:SetupAddon(addonName, addon, addon.db.frame, addon.db.details)
 end)

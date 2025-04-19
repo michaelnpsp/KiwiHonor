@@ -1,5 +1,5 @@
 
-local addon = _G[(...)]
+local addon = _G[...]
 
 SLASH_KIWIHONOR1,SLASH_KIWIHONOR2 = "/khonor", "/kiwihonor"
 SlashCmdList.KIWIHONOR = function(args)
@@ -16,7 +16,7 @@ SlashCmdList.KIWIHONOR = function(args)
 	elseif arg1 == 'toggle' and noskip then
 		addon:ToggleFrameVisibility()
 	elseif arg1 == 'resetpos' and noskip then
-		addon.db.framePos.x, addon.db.framePos.x = 0, 0
+		addon.db.frame.framePos.x, addon.db.frame.framePos.x = 0, 0
 		addon:RestorePosition()
 	else
 		print("Kiwi Honor:")

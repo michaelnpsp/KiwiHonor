@@ -3,7 +3,7 @@
 ## Notes: Battlegrounds Honor Tracker
 ## Author: MiCHaeL
 ## Version: @project-version@
-## IconTexture: Interface/AddOns/KiwiHonor/KiwiHonor.tga
+## IconTexture: Interface/AddOns/KiwiHonor/icon.tga
 ## X-Curse-Project-ID:
 ## X-Wago-ID:
 ## SavedVariables: KiwiHonorDB
@@ -17,6 +17,7 @@ Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
 Libs\LibKiwiDropDownMenu-1.0\LibKiwiDropDownMenu-1.0.lua
 Libs\LibKiwiDisplayFrame-1.0\LibKiwiDisplayFrame-1.0.lua
 
-KiwiHonor.lua
-KiwiHonorCmd.lua
-KiwiHonorMenu.lua
+core.lua
+popupmenu.lua
+slashcommand.lua
+
