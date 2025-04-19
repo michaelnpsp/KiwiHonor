@@ -14,12 +14,15 @@ local addon = lkf:CreateFrame(addonName)
 addon.versionToc = C_AddOns.GetAddOnMetadata(addonName, "Version")
 addon.versionStr = (addon.versionToc=='\@project-version\@' and 'Dev' or addon.versionToc)
 
+-- addon icon
+addon.iconFile = "Interface\\AddOns\\KiwiHonor\\KiwiHonor.tga"
+
 -- localization
 local L = setmetatable( {}, { __index = function(t,k) return k; end } )
 addon.L = L
 
 -- database defaults
-local DEFAULTS = {
+addon.DEFAULTS = {
 	-- honor info
 	bgZoneName = nil,
 	bgTimeStart = nil,
@@ -43,6 +46,7 @@ local DEFAULTS = {
 	spacing = 1,
 	fontName = nil,
 	fontSize = nil,
+	frameWidth = 2/3,
 	frameMargin = 4,
 	frameStrata = nil,
 	framePos = {anchor='TOPLEFT', x=0, y=0},
@@ -87,7 +91,7 @@ do
 		KiwiHonorDB = KiwiHonorDB or {profilePerChar={}}
 		local charKey = UnitName("player") .. " - " .. GetRealmName()
 		local profiles = KiwiHonorDB.profilePerChar
-		profiles[charKey] = copy( profiles[charKey] or {}, DEFAULTS )
+		profiles[charKey] = copy( profiles[charKey] or {}, addon.DEFAULTS )
 		return profiles[charKey], KiwiHonorDB
 	end
 end
@@ -332,7 +336,7 @@ addon:SetScript("OnEvent", function(frame, event, name)
 	if AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
 		AddonCompartmentFrame:RegisterAddon({
 			text = addonName,
-			icon  = "Interface\\AddOns\\KiwiHonor\\KiwiHonor.tga",
+			icon  = addon.iconFile,
 			registerForAnyClick = true,
 			notCheckable = true,
 			func = function(_,_,_,_,button) addon:MouseClick(button); end,
@@ -342,7 +346,7 @@ addon:SetScript("OnEvent", function(frame, event, name)
 	LibStub("LibDBIcon-1.0"):Register(addonName, LibStub("LibDataBroker-1.1"):NewDataObject(addonName, {
 		type  = "launcher",
 		label = C_AddOns.GetAddOnInfo(addonName, "Title"),
-		icon  = "Interface\\AddOns\\KiwiHonor\\KiwiHonor",
+		icon  = addon.iconFile,
 		OnClick = function(_, button) addon:MouseClick(button); end,
 		OnTooltipShow = function(tooltip)
 			tooltip:AddDoubleLine(addonName, addon.versionStr)
@@ -362,7 +366,5 @@ addon:SetScript("OnEvent", function(frame, event, name)
 	addon:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
 	addon:RegisterEvent("PLAYER_PVP_KILLS_CHANGED")
 	-- display setup
-	if not (addon.db.details and lkf:SetupPlugin(addon, nil, "Interface\\AddOns\\KiwiHonor\\KiwiHonor.tga", L["Display battlegrounds Honor stats."], addon.versionStr)) then
-		lkf:SetupFrame(addon)
-	end
+	lkf:SetupAddon(addon, nil, addon.db.details, addon.iconFile, L["Display battlegrounds Honor stats."], "MiCHaEL", addon.versionStr)
 end)

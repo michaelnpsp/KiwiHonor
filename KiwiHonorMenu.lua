@@ -15,7 +15,7 @@ local config
 
 -- here starts the definition of the KiwiFrame menu
 local function cfgWidth(info)
-	config.frameWidth = info.value~=0 and math.max( (config.frameWidth or addon:GetWidth()) + info.value, 50) or nil
+config.frameWidth = info.value~=0 and math.max(addon:GetWidth()+info.value, 50) or addon.DEFAULTS.frameWidth
 	addon:LayoutFrame()
 end
 local function cfgMargin(info)
