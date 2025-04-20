@@ -2,8 +2,6 @@ local _, addonTbl = ...
 addonTbl.L = setmetatable( {}, { __index = function(t,k) return k; end } )
 local C, L = GetLocale(), addonTbl.L
 
-print("---", addonTbl)
-
 if C == "esES" or C == "esMX" then
 	L['Zone'] = 'Zona'
 	L["Bg duration (avg)"] = "Bg duración (media)"
