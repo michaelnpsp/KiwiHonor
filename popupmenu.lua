@@ -1,9 +1,10 @@
-local addon = _G[(...)]
+local addonName, addonTbl = ...
 
 local lkm = LibStub("LibKiwiDropDownMenu-1.0", true)
 
 -- localization
-local L = addon.L
+local addon = _G[addonName]
+local L = addonTbl.L
 
 -- default values
 local FONT_SIZE_DEFAULT = 12

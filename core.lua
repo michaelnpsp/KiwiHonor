@@ -2,20 +2,19 @@
 -- KiwiHonor (C) 2025 MiCHaEL
 -- ============================================================================
 
-local addonName = ...
+local addonName, addonTbl = ...
 
 -- libraries
 local lkf = LibStub("LibKiwiDisplayFrame-1.0", true)
 
 -- main frame
-local addon = lkf:CreateFrame(addonName)
+local addon = lkf:CreateFrame(addonName, addonTbl)
 
 -- addon version
 local versionStr = C_AddOns.GetAddOnMetadata(addonName, "Version")
 
 -- localization
-local L = LibStub('AceLocale-3.0'):GetLocale(addonName, true)
-addon.L = L
+local L = addonTbl.L
 
 -- database defaults
 addon.defaults = {
@@ -210,7 +209,7 @@ function addon:UpdateContent(wkHonorOpt)
 end
 
 function addon:EnableTimer(ctime)
-	if self then -- init
+	if self then -- init, self==nil => called from C_Timer
 		addon.timerEnabled = true
 	elseif addon.db.stats.snTimeStart and addon:IsVisible() then  -- tick
 		ctime = time()
@@ -254,7 +253,7 @@ function addon:StartSession()
 	db.snBgTime = nil
 	db.snTimeStart = db.bgTimeStart or time()
 	db.snHonorStart = db.bgHonorStart or GetWeekHonor()
-	addon:UpdateContent()
+	self:UpdateContent()
 end
 
 function addon:FinishSession()
@@ -264,7 +263,7 @@ function addon:FinishSession()
 	db.snBgTime = nil
 	db.snTimeStart = db.bgTimeStart or nil
 	db.snHonorStart = db.bgHonorStart or nil
-	addon:UpdateContent()
+	self:UpdateContent()
 end
 
 function addon:ZONE_CHANGED_NEW_AREA(event, isLogin)
