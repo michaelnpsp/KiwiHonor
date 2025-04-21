@@ -92,7 +92,7 @@ local function cfgProfile(info,_,_,checked)
 				L["|cFF7FFF72KiwiHonor|r\nA general profile will be used to save the appearance settings. Are you sure?"]
 	addon:ConfirmDialog(msg, function()
 		local lkf = LibStub("LibKiwiDisplayFrame-1.0", true)
-		lkf:GetProfile(addon.db.sv, addon.defaults, addon.db.profileName=='Default' and lkf.charKey or 'Default')
+		lkf:GetProfile(addon.db.sv, addon.db.profile, addon.db.profileName=='Default' and lkf.charKey or 'Default')
 		ReloadUI()
 	end)
 end

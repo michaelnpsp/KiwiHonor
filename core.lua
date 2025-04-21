@@ -128,13 +128,11 @@ end
 -- ============================================================================
 
 function addon:InitDatabase()
-	local db = {}
-	db.profile, db.profileName, db.sv = lkf:GetProfile(addonName..'DB', addon.defaults, true)
-	db.display = db.profile.display
-	db.stats = lkf:GetTree(db.sv, 'stats', lkf.charKey)
-	self.db = db
+	self.db = {}
+	self.db.profile, self.db.profileName, self.db.sv = lkf:SetProfile(addonName..'DB', addon.defaults, true)
+	self.db.stats = lkf:GetTree(self.db.sv, 'stats', lkf.charKey)
 	self.InitDatabase = nil
-	return db.profile
+	return self.db.profile
 end
 
 function addon:ShowTooltip(tooltip)
@@ -151,7 +149,7 @@ function addon:LayoutContent()
 		if disabled then return end
 		tempTable[#tempTable+1] = L[left] .. ':'
 	end
-	local dd = self.db.display
+	local dd = self.db.profile.display
 	local bg = self.db.stats.bgTimeStart
 	register(dd.zone, "|cFF7FFF72KiwiHonor" )
 	register(dd.bg_duration, bg and "Bg duration" or "Bg duration (avg)" )
@@ -170,7 +168,7 @@ end
 function addon:UpdateContent(wkHonorOpt)
 	if not self._zoneName or not self:IsVisible() then return end
 	local db = self.db.stats
-	local dp = self.db.display
+	local dp = self.db.profile.display
 	local ctime = time()
 	local wkHonor = tonumber(wkHonorOpt) or GetWeekHonor()
 	-- session
