@@ -75,6 +75,27 @@ local function cfgColor(info, ...)
 	frame[info.value] = {...}
 	addon:LayoutFrame()
 end
+local function cfgDetails(info,_,_,checked)
+	if checked==nil then return config.details~=nil end
+	local msg = config.details and
+				L["|cFF7FFF72KiwiHonor|r\nHonor stats will be displayed in a standalone window. Are you sure you want to disable KiwiHonor Details Plugin?"] or
+				L["|cFF7FFF72KiwiHonor|r\nHonor stats will be displayed in a Details window. Are you sure you want to enable KiwiHonor Details Plugin?"]
+	addon:ConfirmDialog(msg, function()
+		config.details = (not config.details) or nil
+		ReloadUI()
+	end)
+end
+local function cfgProfile(info,_,_,checked)
+	if checked==nil then return addon.db.profileName~='Default' end
+	local msg = addon.db.profileName=='Default' and
+				L["|cFF7FFF72KiwiHonor|r\nA specific profile for this char will be used to save the appearance settings. Are you sure?"] or
+				L["|cFF7FFF72KiwiHonor|r\nA general profile will be used to save the appearance settings. Are you sure?"]
+	addon:ConfirmDialog(msg, function()
+		local lkf = LibStub("LibKiwiDisplayFrame-1.0", true)
+		lkf:GetProfile(addon.db.sv, addon.defaults, addon.db.profileName=='Default' and lkf.charKey or 'Default')
+		ReloadUI()
+	end)
+end
 local function cfgToggleSession()
 	if stats.snTimeStart then
 		addon:ConfirmDialog( L["|cFF7FFF72KiwiHonor|r\nAre you sure you want to finish the session?"], function() addon:FinishSession(); end)
@@ -88,20 +109,8 @@ local function cfgSetHonorGoal()
 		addon:UpdateContent()
 	end)
 end
-local function cfgToggleDetails()
-	local msg = config.details and
-				L["|cFF7FFF72KiwiHonor|r\nHonor stats will be displayed in a standalone window. Are you sure you want to disable KiwiHonor Details Plugin?"] or
-				L["|cFF7FFF72KiwiHonor|r\nHonor stats will be displayed in a Details window. Are you sure you want to enable KiwiHonor Details Plugin?"]
-	addon:ConfirmDialog(msg, function()
-		config.details = (not config.details) or nil
-		ReloadUI()
-	end)
-end
 local function getSessionText()
 	return stats.snTimeStart and L['Session Finish'] or L['Session Start']
-end
-local function getDetailsText()
-	return config.details and L['Disable Details Plugin'] or L['Enable Details Plugin']
 end
 local function isHideHidden()
 	return not addon:IsVisible() or addon.plugin~=nil
@@ -174,12 +183,15 @@ addon.menuMain = {
 		{ text = L['Bars Texture'], menuList = lkm:defMediaMenu('statusbar', cfgRowTexture, {[L['[None]']] = ''}) },
 		{ text = L['Bars Color'],   hasColorSwatch = true, hasOpacity = true, value = 'rowColor', get = cfgColor, set = cfgColor },
 	} },
-	{ text = getDetailsText, func = cfgToggleDetails },
+	{ text = L['Miscellaneus'], menuList = {
+		{ text = L['Details Plugin'], cf = cfgDetails, isNotRadio = true  },
+		{ text = L['Profile per Char'], cf = cfgProfile, isNotRadio = true },
+	} },
 	{ text = L['Hide Frame'], hidden = isHideHidden, func = cfgSetHide },
 }
 
 -- show menu
 function addon:ShowMenu()
-	config, frame, stats = self.db, self.db.frame, self.db.stats
+	config, stats, frame = self.db.profile, self.db.stats, self.dbframe
 	lkm:showMenu(self.menuMain, "KiwiHonorPopupMenu", "cursor", 0 , 0, 2)
 end

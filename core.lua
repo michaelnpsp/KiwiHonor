@@ -10,26 +10,10 @@ local lkf = LibStub("LibKiwiDisplayFrame-1.0", true)
 -- main frame
 local addon = lkf:CreateFrame(addonName, addonTbl)
 
--- addon version
-local versionStr = C_AddOns.GetAddOnMetadata(addonName, "Version")
-
--- localization
-local L = addonTbl.L
-
--- database defaults
+-- database profile defaults
 addon.defaults = {
-	-- honor stats
-	stats = {
-		bgZoneName = nil,
-		bgTimeStart = nil,
-		bgHonorStart = nil,
-		snTimeStart = nil,
-		snHonorStart = nil,
-		snBgCount = nil,
-		snBgHonor = nil,
-		snBgTime = nil,
-		wkHonorGoal = nil,
-	},
+	-- text lines to hide
+	display = {},
 	-- frame appearance
 	frame = {
 		visible = true,
@@ -46,8 +30,6 @@ addon.defaults = {
 		frameStrata = nil,
 		framePos = {anchor='TOPLEFT', x=0, y=0},
 	},
-	-- text lines to hide
-	display = {},
 	-- minimap icon
 	minimapIcon = {hide=false},
 	-- display as details plugin
@@ -71,7 +53,10 @@ local IsInInstance = IsInInstance
 local GetInstanceInfo = GetInstanceInfo
 local GetPVPThisWeekStats = GetPVPThisWeekStats
 
--- local variables
+-- localization
+local L = addonTbl.L
+
+-- temporary table
 local tempTable = {}
 
 -- ============================================================================
@@ -142,8 +127,18 @@ end
 -- addon methods
 -- ============================================================================
 
+function addon:InitDatabase()
+	local db = {}
+	db.profile, db.profileName, db.sv = lkf:GetProfile(addonName..'DB', addon.defaults, true)
+	db.display = db.profile.display
+	db.stats = lkf:GetTree(db.sv, 'stats', lkf.charKey)
+	self.db = db
+	self.InitDatabase = nil
+	return db.profile
+end
+
 function addon:ShowTooltip(tooltip)
-	tooltip:AddDoubleLine(addonName, versionStr)
+	tooltip:AddDoubleLine(addonName, C_AddOns.GetAddOnMetadata(addonName, "Version"))
 	if self.plugin then
 		tooltip:AddLine(L["|cFFff4040Left or Right Click|r to open menu"], 0.2, 1, 0.2)
 	else
@@ -287,7 +282,7 @@ function addon:ZONE_CHANGED_NEW_AREA(event, isLogin)
 		self:FinishBattleground()
 	end
 	self:UpdateContent()
-	self:SetShown(self.db.frame.visible)
+	self:SetShown(self.dbframe.visible)
 end
 addon.PLAYER_ENTERING_WORLD = addon.ZONE_CHANGED_NEW_AREA
 
@@ -310,11 +305,11 @@ addon:SetScript("OnEvent", function(frame, event, name)
 	-- unregister init events
 	addon:UnregisterAllEvents()
 	-- database setup
-	addon.db = lkf:LoadProfile(addonName..'DB', addon.defaults)
+	local profile = addon:InitDatabase()
 	-- compartment icon
 	lkf:RegisterCompartment(addonName, addon, "MouseClick")
 	-- minimap icon
-	lkf:RegisterMinimapIcon(addonName, addon, addon.db.minimapIcon, "MouseClick", "ShowTooltip")
+	lkf:RegisterMinimapIcon(addonName, addon, profile.minimapIcon, "MouseClick", "ShowTooltip")
 	-- events
 	addon:SetScript('OnEvent', lkf.DispatchEvent)
 	addon:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -324,5 +319,5 @@ addon:SetScript("OnEvent", function(frame, event, name)
 	addon:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
 	addon:RegisterEvent("PLAYER_PVP_KILLS_CHANGED")
 	-- setup display
-	lkf:SetupAddon(addonName, addon, addon.db.frame, addon.db.details)
+	lkf:SetupAddon(addonName, addon, profile.frame, profile.details)
 end)

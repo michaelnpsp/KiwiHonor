@@ -8,7 +8,7 @@ SlashCmdList.KIWIHONOR = function(args)
 	if arg1 == 'config' then
 		addon:ShowMenu()
 	elseif arg1 == 'minimap' then
-		lkf:ToggleMinimapIcon(addonName, addon.db.minimapIcon)
+		lkf:ToggleMinimapIcon(addonName, addon.minimapIcon)
 	elseif arg1 == 'show' and noskip then
 		addon:ToggleFrameVisibility(true)
 	elseif arg1 == 'hide' and noskip then
@@ -16,7 +16,7 @@ SlashCmdList.KIWIHONOR = function(args)
 	elseif arg1 == 'toggle' and noskip then
 		addon:ToggleFrameVisibility()
 	elseif arg1 == 'resetpos' and noskip then
-		addon.db.frame.framePos.x, addon.db.frame.framePos.x = 0, 0
+		addon.dbframe.framePos.x, addon.dbframe.framePos.x = 0, 0
 		addon:RestorePosition()
 	else
 		print("Kiwi Honor:")
