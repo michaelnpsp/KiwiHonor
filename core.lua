@@ -129,8 +129,8 @@ end
 
 function addon:InitDatabase()
 	self.db = {}
-	self.db.profile, self.db.profileName, self.db.sv = lkf:SetProfile(addonName..'DB', addon.defaults, true)
-	self.db.stats = lkf:GetTree(self.db.sv, 'stats', lkf.charKey)
+	self.db.profile, self.db.profileName, self.db.sv = lkf:SetDatabaseProfile(addonName..'DB', addon.defaults, true)
+	self.db.stats = lkf:SetDatabaseSection(self.db.sv, 'stats', lkf.charKey)
 	self.InitDatabase = nil
 	return self.db.profile
 end
