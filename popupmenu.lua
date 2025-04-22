@@ -113,10 +113,11 @@ local function getSessionText()
 	return stats.snTimeStart and L['Session Finish'] or L['Session Start']
 end
 local function isHideHidden()
-	return not addon:IsVisible() or addon.plugin~=nil
+	return addon.plugin~=nil
 end
-local function cfgSetHide()
-	addon:ToggleFrameVisibility(false)
+local function cfgFrameHide(info,_,_,checked)
+	if checked==nil then return not not addon.dbframe.visible end
+	addon:ToggleFrameVisibility()
 end
 local function isPlugin()
 	return addon.plugin~=nil
@@ -147,47 +148,43 @@ addon.menuMain = {
 		{ text = L['Honor remain'],     value = 'hr_remain',    },
 		{ text = L['Honor goal in'],    value = 'hr_goalin',    },
 	} },
-	{ text = L['Frame'], hidden = isPlugin, menuList = {
-		{ text = L['Frame Strata'], default = { cf = cfgStrata, isNotRadio = false }, menuList = {
-			{ text = L['HIGH'],    value = 'HIGH',   },
-			{ text = L['MEDIUM'],  value = 'MEDIUM', },
-			{ text = L['LOW'],     value = 'LOW',  	 },
-		} },
-		{ text = L['Frame Anchor'], default = { cf = cfgAnchor, isNotRadio = false }, menuList = {
-			{ text = L['Top Left'],     value = 'TOPLEFT',     },
-			{ text = L['Top Right'],    value = 'TOPRIGHT',    },
-			{ text = L['Bottom Left'],  value = 'BOTTOMLEFT',  },
-			{ text = L['Bottom Right'], value = 'BOTTOMRIGHT', },
-			{ text = L['Left'],   		value = 'LEFT',   	   },
-			{ text = L['Right'],  		value = 'RIGHT',  	   },
-			{ text = L['Top'],    		value = 'TOP',    	   },
-			{ text = L['Bottom'], 		value = 'BOTTOM', 	   },
-			{ text = L['Center'], 		value = 'CENTER', 	   },
-		} },
-		{ text = L['Frame Width'], default = { func = cfgWidth, keepShownOnClick = 1 }, menuList = lkm:CopyTable(menuSize) },
+	{ text = L['Frame Strata'], hidden = isPlugin, default = { cf = cfgStrata, isNotRadio = false }, menuList = {
+		{ text = L['HIGH'],    value = 'HIGH',   },
+		{ text = L['MEDIUM'],  value = 'MEDIUM', },
+		{ text = L['LOW'],     value = 'LOW',  	 },
 	} },
-	{ text = L['Text'], menuList = {
-		{ text = L['Text Margin'],  default = { func = cfgMargin,   keepShownOnClick = 1 }, menuList = lkm:CopyTable(menuSize) },
-		{ text = L['Text Spacing'], default = { func = cfgSpacing,  keepShownOnClick = 1 }, menuList = lkm:CopyTable(menuSize) },
-		{ text = L['Text Size'],    default = { func = cfgFontSize, keepShownOnClick = 1 }, menuList = lkm:CopyTable(menuSize) },
-		{ text = L['Text Font'], menuList = lkm:defMediaMenu('font', cfgFont, {[L['[Default]']] = ''}) },
+	{ text = L['Frame Anchor'], hidden = isPlugin, default = { cf = cfgAnchor, isNotRadio = false }, menuList = {
+		{ text = L['Top Left'],     value = 'TOPLEFT',     },
+		{ text = L['Top Right'],    value = 'TOPRIGHT',    },
+		{ text = L['Bottom Left'],  value = 'BOTTOMLEFT',  },
+		{ text = L['Bottom Right'], value = 'BOTTOMRIGHT', },
+		{ text = L['Left'],   		value = 'LEFT',   	   },
+		{ text = L['Right'],  		value = 'RIGHT',  	   },
+		{ text = L['Top'],    		value = 'TOP',    	   },
+		{ text = L['Bottom'], 		value = 'BOTTOM', 	   },
+		{ text = L['Center'], 		value = 'CENTER', 	   },
 	} },
-	{ text = L['Background'], hidden = isPlugin, menuList = {
-		{ text = L['Background color '], hasColorSwatch = true, hasOpacity = true, value = 'backColor', get = cfgColor, set = cfgColor },
-	} },
-	{ text = L['Border'], hidden = isPlugin, menuList = {
+	{ text = L['Frame Width'],  hidden = isPlugin, default = { func = cfgWidth,    keepShownOnClick = 1 }, menuList = lkm:CopyTable(menuSize) },
+	{ text = L['Frame Border'], hidden = isPlugin, menuList = {
 		{ text = L['Border Texture'], menuList = lkm:defMediaMenu('border', cfgBorder) },
 		{ text = L['Border Color '],  hasColorSwatch = true, hasOpacity = true, value = 'borderColor', get = cfgColor, set = cfgColor },
 	} },
-	{ text = L['Bars'], menuList = {
+	{ text = L['Frame Back'], hidden = isPlugin, menuList = {
+		{ text = L['Background color '], hasColorSwatch = true, hasOpacity = true, value = 'backColor', get = cfgColor, set = cfgColor },
+	} },
+	{ text = L['Text Margin'],  default = { func = cfgMargin,   keepShownOnClick = 1 }, menuList = lkm:CopyTable(menuSize) },
+	{ text = L['Text Spacing'], default = { func = cfgSpacing,  keepShownOnClick = 1 }, menuList = lkm:CopyTable(menuSize) },
+	{ text = L['Text Size'],    default = { func = cfgFontSize, keepShownOnClick = 1 }, menuList = lkm:CopyTable(menuSize) },
+	{ text = L['Text Font'], menuList = lkm:defMediaMenu('font', cfgFont, {[L['[Default]']] = ''}) },
+	{ text = L['Text Bars'], menuList = {
 		{ text = L['Bars Texture'], menuList = lkm:defMediaMenu('statusbar', cfgRowTexture, {[L['[None]']] = ''}) },
 		{ text = L['Bars Color'],   hasColorSwatch = true, hasOpacity = true, value = 'rowColor', get = cfgColor, set = cfgColor },
 	} },
 	{ text = L['Miscellaneus'], menuList = {
 		{ text = L['Details Plugin'], cf = cfgDetails, isNotRadio = true  },
 		{ text = L['Profile per Char'], cf = cfgProfile, isNotRadio = true },
+		{ text = L['Frame Visible'], cf =  cfgFrameHide, isNotRadio = true, hidden = isHideHidden },
 	} },
-	{ text = L['Hide Frame'], hidden = isHideHidden, func = cfgSetHide },
 }
 
 -- show menu
