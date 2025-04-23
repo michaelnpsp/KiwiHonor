@@ -15,25 +15,11 @@ addon.defaults = {
 	-- text lines to hide
 	display = {},
 	-- frame appearance
-	frame = {
-		visible = true,
-		backColor = {0,0,0,.5},
-		borderColor = {1,1,1,1},
-		borderTexture = nil,
-		rowColor = nil,
-		rowTexture = nil,
-		spacing = 1,
-		fontName = nil,
-		fontSize = nil,
-		frameWidth = 2/3,
-		frameMargin = 4,
-		frameStrata = nil,
-		framePos = {anchor='TOPLEFT', x=0, y=0},
-	},
+	frame = lkf.defaults,
 	-- minimap icon
 	minimapIcon = {hide=false},
-	-- display as details plugin
-	details = nil,
+	-- details plugin enabled
+	details = false,
 }
 
 -- local references
@@ -317,5 +303,5 @@ addon:SetScript("OnEvent", function(frame, event, name)
 	addon:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
 	addon:RegisterEvent("PLAYER_PVP_KILLS_CHANGED")
 	-- setup display
-	lkf:SetupAddon(addonName, addon, profile.frame, profile.details)
+	lkf:SetupAddon(addon, profile.frame, profile.details)
 end)

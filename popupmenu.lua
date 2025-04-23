@@ -89,7 +89,7 @@ local menuMain = {
 	} },
 }
 -- insert default menu options to manage frame position and appearance
-local from = #menuMain-2
+local from = #menuMain-1
 for i,item in ipairs(addon.menuMain) do
 	table.insert(menuMain, from+i, item)
 end
