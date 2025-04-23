@@ -82,15 +82,17 @@ local menuMain = {
 		{ text = L['Honor remain'],     value = 'hr_remain',    },
 		{ text = L['Honor goal in'],    value = 'hr_goalin',    },
 	} },
+	{ text = L['Miscellaneus'], menuList = {
+		{ text = L['Details Plugin'], cf = cfgDetails, isNotRadio = true  },
+		{ text = L['Profile per Char'], cf = cfgProfile, isNotRadio = true },
+		{ text = L['Frame Visible'], cf =  cfgFrameHide, isNotRadio = true, hidden = isPlugin },
+	} },
 }
-for _,item in ipairs(addon.menuMain) do
-	menuMain[#menuMain+1] = item
+-- insert default menu options to manage frame position and appearance
+local from = #menuMain-2
+for i,item in ipairs(addon.menuMain) do
+	table.insert(menuMain, from+i, item)
 end
-menuMain[#menuMain+1] =	{ text = L['Miscellaneus'], menuList = {
-	{ text = L['Details Plugin'], cf = cfgDetails, isNotRadio = true  },
-	{ text = L['Profile per Char'], cf = cfgProfile, isNotRadio = true },
-	{ text = L['Frame Visible'], cf =  cfgFrameHide, isNotRadio = true, hidden = isPlugin },
-} }
 
 -- Register popup menu
 addon.menuMain = menuMain
