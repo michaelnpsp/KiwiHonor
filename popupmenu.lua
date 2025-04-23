@@ -5,9 +5,6 @@ local lkm = LibStub("LibKiwiDropDownMenu-1.0", true)
 -- addon, localization
 local addon, L = _G[addonName], addonTbl.L
 
--- addon.db
-local config, stats
-
 -- here starts the definition of the KiwiFrame menu
 local function cfgDisplay(info,_,_,checked)
 	if checked==nil then return not addon.db.profile.display[info.value] end
