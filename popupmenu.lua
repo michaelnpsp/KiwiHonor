@@ -14,24 +14,24 @@ local function cfgDisplay(info,_,_,checked)
 end
 
 local function cfgDetails(info,_,_,checked)
-	if checked==nil then return addon.db.profile.details~=nil end
+	if checked==nil then return addon.db.profile.details end
 	local msg = addon.db.profile.details and
 				L["|cFF7FFF72KiwiHonor|r\nHonor stats will be displayed in a standalone window. Are you sure you want to disable KiwiHonor Details Plugin?"] or
 				L["|cFF7FFF72KiwiHonor|r\nHonor stats will be displayed in a Details window. Are you sure you want to enable KiwiHonor Details Plugin?"]
 	addon:ConfirmDialog(msg, function()
-		addon.db.profile.details = (not addon.db.profile.details) or nil
+		addon.db.profile.details = not addon.db.profile.details
 		ReloadUI()
 	end)
 end
 
 local function cfgProfile(info,_,_,checked)
-	if checked==nil then return addon.db.profileName~='Default' end
-	local msg = addon.db.profileName=='Default' and
-				L["|cFF7FFF72KiwiHonor|r\nA specific profile for this char will be used to save the appearance settings. Are you sure?"] or
+	if checked==nil then return addon.db.pfName~='Default' end
+	local msg = addon.db.pfName=='Default' and
+				L["|cFF7FFF72KiwiHonor|r\nA specific profile for this character will be used to save the appearance settings. Are you sure?"] or
 				L["|cFF7FFF72KiwiHonor|r\nA general profile will be used to save the appearance settings. Are you sure?"]
 	addon:ConfirmDialog(msg, function()
 		local lkf = LibStub("LibKiwiDisplayFrame-1.0", true)
-		lkf:GetProfile(addon.db.sv, addon.db.profile, addon.db.profileName=='Default' and lkf.charKey or 'Default')
+		lkf:GetProfile(addon.db.sv, addon.db.profile, addon.db.pfName=='Default' and lkf.charKey or 'Default')
 		ReloadUI()
 	end)
 end

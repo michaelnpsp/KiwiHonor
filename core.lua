@@ -113,23 +113,6 @@ end
 -- addon methods
 -- ============================================================================
 
-function addon:InitDatabase()
-	self.db = {}
-	self.db.profile, self.db.profileName, self.db.sv = lkf:SetDatabaseProfile(addonName..'DB', addon.defaults, true)
-	self.db.stats = lkf:SetDatabaseSection(self.db.sv, 'stats', lkf.charKey)
-	self.InitDatabase = nil
-	return self.db.profile
-end
-
-function addon:ShowTooltip(tooltip)
-	tooltip:AddDoubleLine(addonName, C_AddOns.GetAddOnMetadata(addonName, "Version"))
-	if self.plugin then
-		tooltip:AddLine(L["|cFFff4040Left or Right Click|r to open menu"], 0.2, 1, 0.2)
-	else
-		tooltip:AddLine(L["|cFFff4040Left Click|r toggle visibility\n|cFFff4040Right Click|r open menu"], 0.2, 1, 0.2)
-	end
-end
-
 function addon:LayoutContent()
 	local function register(disabled, left)
 		if disabled then return end
@@ -289,11 +272,12 @@ addon:SetScript("OnEvent", function(frame, event, name)
 	-- unregister init events
 	addon:UnregisterAllEvents()
 	-- database setup
-	local profile = addon:InitDatabase()
+	addon.db = lkf:SetDatabaseProfile(addonName..'DB', addon.defaults, true)
+	addon.db.stats = lkf:SetDatabaseSection(addon.db, 'stats', lkf.charKey)
 	-- compartment icon
-	lkf:RegisterCompartment(addonName, addon, "MouseClick")
+	lkf:RegisterCompartment(addon)
 	-- minimap icon
-	lkf:RegisterMinimapIcon(addonName, addon, profile.minimapIcon, "MouseClick", "ShowTooltip")
+	lkf:RegisterMinimapIcon(addon, addon.db.profile.minimapIcon)
 	-- events
 	addon:SetScript('OnEvent', lkf.DispatchEvent)
 	addon:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -303,5 +287,5 @@ addon:SetScript("OnEvent", function(frame, event, name)
 	addon:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
 	addon:RegisterEvent("PLAYER_PVP_KILLS_CHANGED")
 	-- setup display
-	lkf:SetupAddon(addon, profile.frame, profile.details)
+	lkf:SetupAddon(addon, addon.db.profile.frame, addon.db.profile.details)
 end)
