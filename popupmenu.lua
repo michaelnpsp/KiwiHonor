@@ -1,9 +1,13 @@
 local addonName, addonTbl = ...
 
+-- menu library
 local lkm = LibStub("LibKiwiDropDownMenu-1.0", true)
 
--- addon, localization
-local addon, L = _G[addonName], addonTbl.L
+-- addon
+local addon = _G[addonName]
+
+-- localization
+local L = addon.L
 
 -- here starts the definition of the KiwiFrame menu
 local function cfgDisplay(info,_,_,checked)
@@ -88,12 +92,8 @@ local menuMain = {
 		{ text = L['Frame Visible'], cf =  cfgFrameHide, isNotRadio = true, hidden = isPlugin },
 	} },
 }
--- insert default menu options to manage frame position and appearance
-local from = #menuMain-1
-for i,item in ipairs(addon.menuMain) do
-	table.insert(menuMain, from+i, item)
-end
 
--- Register popup menu
+lkm:insertMenu( addon.menuMain, menuMain, #menuMain)
+
 addon.menuMain = menuMain
 

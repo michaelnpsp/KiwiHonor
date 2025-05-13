@@ -10,6 +10,9 @@ local lkf = LibStub("LibKiwiDisplayFrame-1.0", true)
 -- main frame
 local addon = lkf:CreateFrame(addonName, addonTbl)
 
+-- localization
+local L = lkf.L
+
 -- database profile defaults
 addon.defaults = {
 	-- text lines to hide
@@ -38,9 +41,6 @@ local GetZoneText = GetZoneText
 local IsInInstance = IsInInstance
 local GetInstanceInfo = GetInstanceInfo
 local GetPVPThisWeekStats = GetPVPThisWeekStats
-
--- localization
-local L = addonTbl.L
 
 -- temporary table
 local tempTable = {}

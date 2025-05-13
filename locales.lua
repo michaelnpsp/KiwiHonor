@@ -1,6 +1,5 @@
-local _, addonTbl = ...
-addonTbl.L = setmetatable( {}, { __index = function(t,k) return k; end } )
-local C, L = GetLocale(), addonTbl.L
+local lkf = LibStub("LibKiwiDisplayFrame-1.0", true)
+local L, C = lkf:GetLocale()
 
 if C == "esES" or C == "esMX" then
 	L['Zone'] = 'Zona'
